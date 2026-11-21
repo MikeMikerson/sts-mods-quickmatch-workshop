@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <!-- The game loads <id>.dll, so the loader is named for the manifest's id. -->
+    <AssemblyName>QuickMatch</AssemblyName>
+    <RootNamespace>QuickMatchLoader</RootNamespace>
+    <!-- ModManager reads every .json under the mods folder as a manifest, so never ship a deps.json. -->
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <EnableSourceControlManagerQueries>false</EnableSourceControlManagerQueries>
+    <PathMap>$(MSBuildProjectDirectory)/=/_/</PathMap>
+    <NuGetAudit>false</NuGetAudit>
+    <Sts2AppPath Condition=" '$(Sts2AppPath)' == '' ">$(HOME)/Library/Application Support/Steam/steamapps/common/Slay the Spire 2/SlayTheSpire2.app</Sts2AppPath>
+    <Sts2DataPath Condition=" '$(Sts2DataPath)' == '' ">$(Sts2AppPath)/Contents/Resources/data_sts2_macos_arm64</Sts2DataPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Only members that are the same on every game version it loads on (GameReferenceTests). -->
+    <Reference Include="sts2">
+      <HintPath>$(Sts2DataPath)/sts2.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

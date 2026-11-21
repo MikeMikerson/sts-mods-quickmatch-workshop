@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- The game runs .NET 9 (sts2.runtimeconfig.json). -->
+    <TargetFramework>net9.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <!-- The game loads <id>.dll, the loader (../QuickMatchLoader), which loads the build named for the game's version. -->
+    <AssemblyName>QuickMatch-$(GameVersion)</AssemblyName>
+    <RootNamespace>QuickMatch</RootNamespace>
+    <!-- ModManager reads every .json under the mods folder as a manifest, so never ship a deps.json. -->
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <!-- Reproducible builds with no local paths: the same source and game version give the same DLL. -->
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <!-- Leave the git commit out of the version and PDB, so a fork or a new commit gives the same DLL. -->
+    <EnableSourceControlManagerQueries>false</EnableSourceControlManagerQueries>
+    <PathMap>$(MSBuildProjectDirectory)/=/_/</PathMap>
+    <!-- The other version's build folders hold generated sources too. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin/**;obj/**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <!-- The stable branch has no Blitz or Dread. -->
+  <PropertyGroup Condition=" '$(GameVersion)' == '0.111' ">
+    <DefineConstants>$(DefineConstants);GAME_0111</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition=" '$(GameVersion)' == '0.111' ">
+    <Compile Remove="Patches/ModeScreenPatches.cs" />
+  </ItemGroup>
+</Project>

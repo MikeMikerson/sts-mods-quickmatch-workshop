@@ -1,0 +1,12 @@
+{
+  "id": "QuickMatch",
+  "name": "Quick Match",
+  "author": "QuickMatch",
+  "description": "Random co-op matchmaking: choose a game mode, a party size (2, 3, 4 or any) and an Ascension, press Play Now and get grouped with other players searching for the same, with or without voice chat. macOS and Windows players play together over Steam. Everyone in the group needs Quick Match.",
+  "version": "v0.28.0",
+  "affects_gameplay": false,
+  "has_dll": true,
+  "has_pck": false,
+  "min_game_version": "0.111.1",
+  "dependencies": []
+}

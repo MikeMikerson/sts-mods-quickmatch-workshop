@@ -1,0 +1,71 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <!-- The game version whose build is tested, against that game's files (the mod's Directory.Build.props). -->
+    <GameVersion Condition=" '$(GameVersion)' == '' ">0.113</GameVersion>
+    <Sts2AppPath Condition=" '$(Sts2AppPath)' == '' ">$(HOME)/Library/Application Support/Steam/steamapps/common/Slay the Spire 2/SlayTheSpire2.app</Sts2AppPath>
+    <Sts2DataPath Condition=" '$(Sts2DataPath)' == '' ">$(Sts2AppPath)/Contents/Resources/data_sts2_macos_arm64</Sts2DataPath>
+    <!-- The mod's Release builds, made first (mod/build.sh). -->
+    <QuickMatchDll>$(MSBuildProjectDirectory)/../QuickMatch/bin/$(GameVersion)/Release/net9.0/QuickMatch-$(GameVersion).dll</QuickMatchDll>
+    <LoaderDll>$(MSBuildProjectDirectory)/../QuickMatchLoader/bin/Release/net9.0/QuickMatch.dll</LoaderDll>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The matching rules are plain C#, so the test compiles the source directly (no game assemblies). -->
+    <Compile Include="../QuickMatch/Matchmaking/MatchPolicy.cs" Link="MatchPolicy.cs" />
+    <Compile Include="../QuickMatch/Matchmaking/OwnLobbyWatch.cs" Link="OwnLobbyWatch.cs" />
+    <Compile Include="../QuickMatchLoader/BuildChoice.cs" Link="Loader/BuildChoice.cs" />
+    <Compile Include="../QuickMatch/Ui/LookLayout.cs" Link="Ui/LookLayout.cs" />
+    <Compile Include="../QuickMatch/Matchmaking/BlockList.cs" Link="BlockList.cs" />
+    <Compile Include="../QuickMatch/Matchmaking/KickVote.cs" Link="KickVote.cs" />
+    <Compile Include="../QuickMatch/Matchmaking/RunKickPolicy.cs" Link="RunKickPolicy.cs" />
+    <Compile Include="../QuickMatch/Matchmaking/KickVoteWire.cs" Link="KickVoteWire.cs" />
+    <Compile Include="../QuickMatch/Matchmaking/StartShortWire.cs" Link="StartShortWire.cs" />
+    <Compile Include="../QuickMatch/Matchmaking/JoinLeaveRecord.cs" Link="JoinLeaveRecord.cs" />
+    <Compile Include="../QuickMatch/Matchmaking/DropPolicy.cs" Link="DropPolicy.cs" />
+    <Compile Include="../QuickMatch/Matchmaking/RejoinPolicy.cs" Link="RejoinPolicy.cs" />
+    <Compile Include="../QuickMatch/Matchmaking/MigrationPolicy.cs" Link="MigrationPolicy.cs" />
+    <!-- The lobby keys, the voice choice they carry, and what a lobby's host takes. -->
+    <Compile Include="../QuickMatch/Steam/LobbyKeys.cs" Link="Transport/LobbyKeys.cs" />
+    <Compile Include="../QuickMatch/Voice/MatchVoice.cs" Link="Voice/MatchVoice.cs" />
+    <Compile Include="../QuickMatch/Matchmaking/MatchMode.cs" Link="MatchMode.cs" />
+    <Compile Include="../QuickMatch/Transport/LobbyLinks.cs" Link="Transport/LobbyLinks.cs" />
+    <Compile Include="../QuickMatch/Matchmaking/LinkPolicy.cs" Link="LinkPolicy.cs" />
+    <!-- Which features a game update turned off; plain C#, GamePatches only feeds it Harmony. -->
+    <Compile Include="../QuickMatch/Patches/GameFeature.cs;../QuickMatch/Patches/FeaturePlan.cs" LinkBase="Patches" />
+    <!-- Voice chat's core (packets, gate, jitter buffer, limiter, mutes, session, Steam wire); plain C#. -->
+    <Compile Include="../QuickMatch/Voice/VoiceFormat.cs;../QuickMatch/Voice/VoicePacket.cs;../QuickMatch/Voice/VoiceGate.cs;../QuickMatch/Voice/JitterBuffer.cs;../QuickMatch/Voice/VoiceLimiter.cs;../QuickMatch/Voice/VoiceMutes.cs;../QuickMatch/Voice/IVoiceDevice.cs;../QuickMatch/Voice/VoiceSession.cs;../QuickMatch/Voice/VoiceSession.Capture.cs;../QuickMatch/Voice/VoiceSession.Playback.cs;../QuickMatch/Voice/SteamVoiceWire.cs" LinkBase="Voice" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Patch-target test inspects the built mod and the installed game without loading them. -->
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>Sts2DataPath</_Parameter1>
+      <_Parameter2>$(Sts2DataPath)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>QuickMatchDll</_Parameter1>
+      <_Parameter2>$(QuickMatchDll)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>LoaderDll</_Parameter1>
+      <_Parameter2>$(LoaderDll)</_Parameter2>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>QuickMatchManifest</_Parameter1>
+      <_Parameter2>$(MSBuildProjectDirectory)/../QuickMatch/QuickMatch.json</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageReference Include="System.Reflection.MetadataLoadContext" Version="9.0.7" />
+    <PackageReference Include="Mono.Cecil" Version="0.11.6" />
+  </ItemGroup>
+</Project>

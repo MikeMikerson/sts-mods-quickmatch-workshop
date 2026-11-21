@@ -1,0 +1,42 @@
+<Project>
+  <!--
+    macOS (Apple silicon) Steam install paths. Override any of these on the command line,
+    e.g. dotnet build -p:Sts2AppPath=/path/to/SlayTheSpire2.app
+    On Windows, point Sts2DataPath at <install>\data_sts2_windows_x86_64.
+  -->
+  <!--
+    The game version a build is for: 0.113 (the beta) or 0.111 (the stable branch). Each is
+    compiled against that game's files, so for 0.111 pass its data folder, e.g. -p:GameVersion=0.111
+    -p:Sts2DataPath=<stable install>/data_sts2_linuxbsd_x86_64 (any platform's: their APIs are the same).
+  -->
+  <PropertyGroup>
+    <GameVersion Condition=" '$(GameVersion)' == '' ">0.113</GameVersion>
+    <BaseOutputPath>bin/$(GameVersion)/</BaseOutputPath>
+    <BaseIntermediateOutputPath>obj/$(GameVersion)/</BaseIntermediateOutputPath>
+  </PropertyGroup>
+  <PropertyGroup>
+    <Sts2AppPath Condition=" '$(Sts2AppPath)' == '' ">$(HOME)/Library/Application Support/Steam/steamapps/common/Slay the Spire 2/SlayTheSpire2.app</Sts2AppPath>
+    <Sts2DataPath Condition=" '$(Sts2DataPath)' == '' ">$(Sts2AppPath)/Contents/Resources/data_sts2_macos_arm64</Sts2DataPath>
+    <!-- The mod has no NuGet packages, so restore has nothing to audit, and the audit's lookup of nuget.org can stall a clean build for minutes. -->
+    <NuGetAudit>false</NuGetAudit>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="sts2">
+      <HintPath>$(Sts2DataPath)/sts2.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="GodotSharp">
+      <HintPath>$(Sts2DataPath)/GodotSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <!-- The game's own Harmony; ModManager resolves 0Harmony to this copy at runtime. -->
+    <Reference Include="0Harmony">
+      <HintPath>$(Sts2DataPath)/0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Steamworks.NET">
+      <HintPath>$(Sts2DataPath)/Steamworks.NET.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>
