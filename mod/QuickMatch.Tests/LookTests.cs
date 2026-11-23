@@ -128,19 +128,22 @@ public class LookTests
 
     [Theory]
     // A voice match: Mute and the volume first, then Block, Vote to Remove, and Close on the right.
-    [InlineData(true, true, true, new[] { "Mute", "Volume", "Block", "Vote", "Close" })]
+    [InlineData(true, false, true, true, new[] { "Mute", "Volume", "Block", "Vote", "Close" })]
     // A No Voice match (or voice off for us): Block and Vote to Remove only.
-    [InlineData(false, true, true, new[] { "Block", "Vote", "Close" })]
+    [InlineData(false, false, true, true, new[] { "Block", "Vote", "Close" })]
+    // In a run with them: Hide Emotes under the voice rows, with voice or without.
+    [InlineData(true, true, true, true, new[] { "Mute", "Volume", "Emotes", "Block", "Vote", "Close" })]
+    [InlineData(false, true, true, true, new[] { "Emotes", "Block", "Vote", "Close" })]
     // Blocked already but still here: the vote stays, Block goes.
-    [InlineData(false, false, true, new[] { "Vote", "Close" })]
-    [InlineData(true, false, true, new[] { "Mute", "Volume", "Vote", "Close" })]
+    [InlineData(false, false, false, true, new[] { "Vote", "Close" })]
+    [InlineData(true, false, false, true, new[] { "Mute", "Volume", "Vote", "Close" })]
     // No vote to start (outside the vote's limits): Block alone.
-    [InlineData(true, true, false, new[] { "Mute", "Volume", "Block", "Close" })]
+    [InlineData(true, false, true, false, new[] { "Mute", "Volume", "Block", "Close" })]
     // Nothing to do: the window only says who they are, and closes.
-    [InlineData(false, false, false, new[] { "Close" })]
-    public void APlayersWindowOffersVoiceOnlyInAVoiceMatch(bool voice, bool blockable, bool canVote, string[] controls)
+    [InlineData(false, false, false, false, new[] { "Close" })]
+    public void APlayersWindowOffersVoiceOnlyInAVoiceMatch(bool voice, bool emotes, bool blockable, bool canVote, string[] controls)
     {
-        Assert.Equal(controls, LookLayout.PlayerControls(voice, blockable, canVote).Select(c => c.ToString()));
+        Assert.Equal(controls, LookLayout.PlayerControls(voice, emotes, blockable, canVote).Select(c => c.ToString()));
     }
 
     [Theory]

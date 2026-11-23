@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Godot;
 using MegaCrit.Sts2.addons.mega_text;
+using QuickMatch.Emotes;
 using QuickMatch.Localization;
 using QuickMatch.Matchmaking;
 using QuickMatch.Voice;
@@ -8,12 +9,12 @@ using QuickMatch.Voice;
 namespace QuickMatch.Ui;
 
 // Everything about one other player in one place, a window in the game's look. Mute and Voice volume (0 to
-// 200%) show only in a match with voice on for us. Block asks first (BlockQuestion); Vote to Remove asks
-// Start Vote or Cancel (VoteQuestion). Opened by a click on a player's name in a quick-match lobby, or by
-// Player Options in the run's expanded player panel (PlayerEntry).
+// 200%) show only in a match with voice on for us, Hide Emotes only in a quick-match run with them. Block asks
+// first (BlockQuestion); Vote to Remove asks Start Vote or Cancel (VoteQuestion). Opened by a click on a player's
+// name in a quick-match lobby, or by Player Options in the run's expanded player panel (PlayerEntry).
 //
-// Node names: QuickMatchPlayerMute, QuickMatchPlayerVolume, QuickMatchPlayerBlock, QuickMatchPlayerVote and
-// QuickMatchPlayerClose.
+// Node names: QuickMatchPlayerMute, QuickMatchPlayerVolume, QuickMatchPlayerEmotes, QuickMatchPlayerBlock,
+// QuickMatchPlayerVote and QuickMatchPlayerClose.
 internal sealed class PlayerWindow
 {
     internal const string NodeName = "QuickMatchPlayerWindow";
@@ -26,6 +27,7 @@ internal sealed class PlayerWindow
     private readonly SceneTree _tree;
     private MegaLabel? _voiceState;
     private Button? _mute;
+    private Button? _hideEmotes;
 
     public static void Open(ulong player)
     {
@@ -51,7 +53,7 @@ internal sealed class PlayerWindow
         long? again = blocked ? null : BlockStore.List.BlockableAgainAt(player, now);
         bool blockable = !blocked && again is null;
         bool canVote = BlockPlayers.CanVoteAgainst(player);
-        IReadOnlyList<PlayerControl> controls = LookLayout.PlayerControls(VoiceHere, blockable, canVote);
+        IReadOnlyList<PlayerControl> controls = LookLayout.PlayerControls(VoiceHere, inRun && EmoteRoom.Here, blockable, canVote);
 
         var state = new List<string> { Loc.Get(inRun ? "QUICKMATCH.PLAYER.in_run" : "QUICKMATCH.PLAYER.in_lobby") };
         if (blocked)
@@ -81,6 +83,11 @@ internal sealed class PlayerWindow
                     {
                         volume.AddChild(slider);
                     }
+                    break;
+                case PlayerControl.Emotes:
+                    HBoxContainer emotes = GameLook.Row(_window.Page, Loc.Get("QUICKMATCH.EMOTES.title"), "QuickMatchPlayerEmotesRow");
+                    _hideEmotes = GameLook.Button("QuickMatchPlayerEmotes", EmotesText(_player), ToggleEmotes, 200);
+                    emotes.AddChild(_hideEmotes);
                     break;
                 case PlayerControl.Block:
                     _window.Buttons.AddChild(GameLook.Button("QuickMatchPlayerBlock", Loc.Get("QUICKMATCH.BLOCK.block"), Block, 200, look: ButtonLook.Red));
@@ -121,6 +128,18 @@ internal sealed class PlayerWindow
     }
 
     public static void ToggleMute(ulong player) => VoiceChat.SetMuted(player, !(VoiceChat.Session?.IsMuted(player) ?? VoiceStore.Mutes.IsMuted(player, VoiceChat.IsFriend(player))));
+
+    private void ToggleEmotes()
+    {
+        EmoteRoom.Gate.SetHidden(_player, !EmoteRoom.Gate.IsHidden(_player));
+        if (_hideEmotes != null)
+        {
+            GameLook.SetText(_hideEmotes, EmotesText(_player));
+        }
+    }
+
+    private static string EmotesText(ulong player) =>
+        Loc.Get(EmoteRoom.Gate.IsHidden(player) ? "QUICKMATCH.EMOTES.show" : "QUICKMATCH.EMOTES.hide");
 
     public static string MuteText(VoiceSession session, ulong player) => Loc.Get(session.IsMuted(player) ? "QUICKMATCH.VOICE.unmute" : "QUICKMATCH.VOICE.mute");
 

@@ -61,26 +61,23 @@ internal static class LobbySearch
         {
             filters[LobbyKeys.Size] = size.ToString(CultureInfo.InvariantCulture);
         }
-        foreach ((string filter, string value) in LobbyLinks.Filters)
-        {
-            filters[filter] = value;
-        }
         var query = new LobbyQuery(
             filters,
             MinFreeSlots: minFreeSlots,
             MaxResults: MaxResults,
-            ReadKeys: [LobbyKeys.Members, LobbyKeys.CreatedAt, LobbyKeys.Size, LobbyKeys.Ascension, LobbyKeys.ResumeProto],
+            ReadKeys: [LobbyKeys.Members, LobbyKeys.CreatedAt, LobbyKeys.Size, LobbyKeys.Ascension, LobbyKeys.ResumeProto, LobbyKeys.Link],
             Nearby: nearby);
 
         var found = new List<LobbyCandidate>();
         foreach (LobbyListing listing in await RequestAsync(query, ct) ?? [])
         {
             // A run's resume lobby may still carry the match marker, but it is no group looking for players.
-            if (RejoinPolicy.IsResumeListing(listing.Data.GetValueOrDefault(LobbyKeys.ResumeProto)))
+            if (RejoinPolicy.IsResumeListing(listing.Data.GetValueOrDefault(LobbyKeys.ResumeProto))
+                || LinkPolicy.HostOffersSockets(listing.Data.GetValueOrDefault(LobbyKeys.Link)) is not bool hostOffersSockets)
             {
                 continue;
             }
-            LobbyLinks.Remember(listing.Id);
+            LobbyLinks.Remember(listing.Id, hostOffersSockets);
             int members = listing.Members;
             if (members <= 0)
             {
@@ -89,7 +86,7 @@ internal static class LobbySearch
             uint.TryParse(listing.Data.GetValueOrDefault(LobbyKeys.CreatedAt), NumberStyles.Integer, CultureInfo.InvariantCulture, out uint createdAt);
             (int lobbySize, bool any) = LobbyKeys.ParseSize(listing.Data.GetValueOrDefault(LobbyKeys.Size));
             int ascension = LobbyKeys.ParseInRange(listing.Data.GetValueOrDefault(LobbyKeys.Ascension), 0, MatchPolicy.MaxAscension, -1);
-            found.Add(new LobbyCandidate(listing.Id, members, createdAt, ascension, lobbySize, any));
+            found.Add(new LobbyCandidate(listing.Id, members, createdAt, ascension, lobbySize, any, hostOffersSockets));
         }
         return found;
     }
@@ -99,38 +96,26 @@ internal static class LobbySearch
     // record bans.
     public static async Task<List<ulong>> FindResumeAsync(string runKey, IReadOnlyCollection<ulong> removed, CancellationToken ct)
     {
-        var filters = new Dictionary<string, string>
-        {
-            [LobbyKeys.ResumeProto] = LobbyKeys.ResumeProtoValue,
-            [LobbyKeys.ResumeKey] = runKey,
-            [LobbyKeys.Version] = QuickMatchLobby.CompatKey.Local().Version,
-        };
-        foreach ((string filter, string value) in LobbyLinks.Filters)
-        {
-            filters[filter] = value;
-        }
-        var query = new LobbyQuery(
-            filters,
-            MinFreeSlots: 1,
-            MaxResults: 10,
-            ReadKeys: [LobbyKeys.ResumeHost]);
-
+        LobbyQuery query = ResumeLobby.Query(runKey, QuickMatchLobby.CompatKey.Local().Version);
         var listings = await RequestAsync(query, ct) ?? [];
         var found = new List<ulong>();
         int skipped = 0;
         foreach (LobbyListing listing in listings)
         {
-            ulong.TryParse(listing.Data.GetValueOrDefault(LobbyKeys.ResumeHost), NumberStyles.None, CultureInfo.InvariantCulture, out ulong host);
-            if (RunKickPolicy.SkipsHost(host, removed))
+            if (ResumeLobby.Read(listing) is not { } route)
+            {
+                continue;
+            }
+            if (RunKickPolicy.SkipsHost(route.Host, removed))
             {
                 skipped++;
                 continue;
             }
-            LobbyLinks.Remember(listing.Id);
+            LobbyLinks.Remember(listing.Id, route.OffersSockets);
             found.Add(listing.Id);
         }
         MainFile.Logger.Info($"resume search key={runKey} -> {found.Count} result(s){(found.Count > 0 ? ": " + string.Join(", ", found) : "")}{(skipped > 0 ? $"; {skipped} hosted by a player voted out of the run, passed by" : "")}");
-        return found;
+        return found.OrderByDescending(id => LobbyLinks.OffersSockets(id) == true).ToList();
     }
 
     // Null on error or timeout.

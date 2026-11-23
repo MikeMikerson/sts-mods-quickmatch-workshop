@@ -29,6 +29,15 @@ public class MigrationTests
     }
 
     [Fact]
+    public void TheSameEligibleDesktopsGoFirstForEveryPlayer()
+    {
+        ulong[] run = [10, 20, 30, 40];
+
+        Assert.Equal([30UL, 20UL], MigrationPolicy.HostOrder(run, 10, [40, 20, 30], [40], desktopPlayers: [30, 40]));
+        Assert.Equal([30UL, 20UL], MigrationPolicy.HostOrder(run, 10, [30, 40, 20], [40], desktopPlayers: [40, 30]));
+    }
+
+    [Fact]
     public void TheOthersLineNamesWhoeverIsAskedToHostNow()
     {
         List<ulong> order = [20, 40, 50];

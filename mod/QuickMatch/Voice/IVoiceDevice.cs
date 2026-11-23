@@ -4,15 +4,24 @@ namespace QuickMatch.Voice;
 
 public enum VoiceCaptureState
 {
-    // Steam is not running.
     Unsupported,
+    NeedsPermission,
+    Asking,
+    Denied,
     Ready,
+}
+
+public static class VoiceDevice
+{
+    public static IVoiceDevice? Current { get; set; }
 }
 
 // All calls come from the game's thread.
 public interface IVoiceDevice
 {
     VoiceCaptureState CaptureState { get; }
+
+    void RequestPermission() { }
 
     bool StartCapture();
 
@@ -23,7 +32,15 @@ public interface IVoiceDevice
     byte[]? ReadVoice();
 }
 
-// Steam's compressed voice to VoiceFormat.SampleRate mono. Never throws on what another player sent.
+// A platform microphone that supplies 16 kHz mono samples directly.
+public interface IPcmVoiceDevice : IVoiceDevice
+{
+    int ReadCapture(Span<short> destination);
+
+    byte[]? IVoiceDevice.ReadVoice() => null;
+}
+
+// Decodes one compressed chunk to VoiceFormat.SampleRate mono.
 public interface IVoiceDecoder
 {
     // Returns how many samples were written: 0 for anything that does not decode.

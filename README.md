@@ -1,41 +1,40 @@
 # Quick Match
 
-Random co-op matchmaking for Slay the Spire 2. Press **Play Now** and you are grouped with other players who
-want the same run, straight into the game's own co-op character select. macOS and Windows players play
-together.
+Find a Slay the Spire 2 co-op partner without chasing lobby links. Open **Multiplayer > Quick Match** and
+press **Play Now** to meet players looking for the same run. If someone disconnects, **Rejoin Run** brings
+them back. If the host leaves, another player can pick up the last autosave.
+
+Windows and macOS players can join the same run.
 
 ## Features
 
-- **One button**: open **Multiplayer**, pick **Quick Match** and press **Play Now**.
 - **Match Options**: the game mode (Standard, or Blitz and Dread once unlocked), the party size (2, 3, 4 or
   Any), the Ascension and voice chat on or off. You only meet players who chose the same.
-- **Voice chat** over Steam, with nothing to set up. Your mic starts muted, and you can mute anyone or turn
-  them down. A player who chose no voice is never heard, whatever they press.
-- **Invite links**: **Copy Invite Link** in a lobby gives a link to paste into Discord or a chat.
+- **Voice chat** starts with your mic muted. Mute another player or adjust their volume during a run.
+  Choose **No Voice** to play without sending or receiving voice.
+- **Emotes**: the button beside your name pops a status icon over your character, so everyone sees that your
+  hand can apply Vulnerable, Weak, Strength or Poison, or that you are asking who can. It works with or without
+  voice, uses the game's own icons, and you can hide any player's emotes.
+- **Invite links**: on desktop, use **Copy Invite Link** in a lobby to invite a friend through Discord or chat.
 - **Starting short**: a lobby that has waited 2 minutes one or two players short can start with those there,
   if everyone agrees.
 - **Blocking and Vote to Remove**: block a player and you are never matched with them again. A vote takes a
   player out of a lobby or a run.
-- **Drops**: a player who drops comes back with **Rejoin Run**, and when the host leaves, another player takes
-  the run over.
+- **Recent players**: the Quick Match window lists the last players you finished a run with, each with a
+  button to their Steam profile, so you can add a good teammate as a friend. The list stays on your device.
 
 ## Installing
 
-Subscribe on the [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3843352549) and start
-the game. The first time, the game asks whether to load mods: accept.
-
-- Everyone in the group needs Quick Match and the same game version. No other mod is needed.
-- If you installed Quick Match by hand before, delete its folder from the game's `mods` folder, or the game
-  keeps using that copy.
-- With mods loaded the game uses a separate save profile, so its unlocks start fresh there.
-- Everyone in a group needs the same gameplay mods turned on. Quick Match itself does not count.
-- Steam must be running.
+Subscribe on the [Steam Workshop](https://steamcommunity.com/sharedfiles/filedetails/?id=3843352549).
+If you previously installed Quick Match by hand, remove its folder from the game's `mods` directory.
+Start the game with Steam running and allow mods when prompted.
 
 ## Compatibility
 
-- The game's stable branch (v0.111.1) and beta (v0.113.0 or later). Stable and beta players never meet, and
-  Blitz and Dread need the beta.
-- Quick Match 0.27.0 to 0.28.0 play together, and with no earlier release.
+- Everyone needs Quick Match 0.30.0, the same game version and the same gameplay mods. Quick Match itself
+  needs no other mod.
+- Supports stable v0.111.1 and the v0.113 beta. Blitz and Dread need the beta.
+- The game uses a separate save profile when mods are enabled. Unlocks start fresh there.
 - A game update can turn a Quick Match feature off until Quick Match is updated. The log says which.
 
 ## Limits
@@ -59,7 +58,7 @@ game version, against that version's game files, so the build also needs the sta
 them with Steam's console (`steam://open/console`, then `download_depot 2868840 2868843`).
 
 ```sh
-export STS2_STABLE_DATA=<stable files>/data_sts2_linuxbsd_x86_64
+export STS2_STABLE_DATA="/path/to/stable/data_sts2_linuxbsd_x86_64"
 mod/build.sh                               # builds mod/out/QuickMatch
 mod/QuickMatch/install.sh                  # builds and copies it into the game's mods folder (macOS)
 cd mod/QuickMatch.Tests && dotnet test     # the tests, against the installed game
@@ -72,3 +71,4 @@ to a copy of the beta's data folder.
 ## License
 
 MIT, see `LICENSE`. Quick Match contains no code or files from the game.
+The bundled Concentus Opus codec carries its own license in `LICENSE-Concentus`.

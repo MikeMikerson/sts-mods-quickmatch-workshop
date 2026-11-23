@@ -1,10 +1,22 @@
 using QuickMatch.Voice;
+using QuickMatch.Platforms.Desktop;
 using Xunit;
 
 namespace QuickMatch.Tests;
 
 public class VoiceWireTests
 {
+    [Fact]
+    public void Only_the_current_lobbys_host_can_switch_a_sockets_client_to_the_relay()
+    {
+        byte[] change = SocketVoiceWire.SwitchToRelay(200);
+        Assert.True(SocketVoiceWire.Read(change, lobby: 200, sender: 30, host: 30, null));
+        Assert.False(SocketVoiceWire.Read(change, lobby: 200, sender: 71, host: 30, null));
+        Assert.False(SocketVoiceWire.Read(change, lobby: 201, sender: 30, host: 30, null));
+        Assert.False(SocketVoiceWire.Read(change[..^1], lobby: 200, sender: 30, host: 30, null));
+        Assert.False(SocketVoiceWire.Read([.. change, 0], lobby: 200, sender: 30, host: 30, null));
+    }
+
     [Fact]
     public void Packet_chunks_round_trip()
     {
@@ -24,13 +36,14 @@ public class VoiceWireTests
         Assert.Empty(read.Chunks);
         Assert.Null(VoicePacket.ReadChunks(3, 8, new byte[] { 4, 1, 1, 0, 9 }));
         Assert.Null(VoicePacket.ReadChunks(3, 8, new byte[] { 5, 1, 1, 0, 1 }));
+        Assert.Null(VoicePacket.ReadChunks(3, 8, new byte[] { 12, 1, 1, 0, 1 }));
         Assert.Null(VoicePacket.ReadChunks(3, 8, new byte[] { 4, 1, 1, 0, 1, 0 }));
     }
 
     [Theory]
     [InlineData(new byte[] { 0, 0 })] // no chunks
     [InlineData(new byte[] { 0, 9 })] // more than the most chunks a packet may carry
-    [InlineData(new byte[] { 4, 1, 1, 0, 9 })] // unknown flag
+    [InlineData(new byte[] { 16, 1, 1, 0, 9 })] // unknown flag
     [InlineData(new byte[] { 0, 1, 0, 0 })] // an empty chunk
     [InlineData(new byte[] { 0, 1, 2, 0, 9 })] // a chunk longer than the bytes left
     [InlineData(new byte[] { 0, 1, 1, 0, 9, 9 })] // bytes left over
@@ -46,16 +59,39 @@ public class VoiceWireTests
         Assert.Null(VoicePacket.ReadChunks(1, 1, part));
     }
 
-    [Fact]
-    public void AVoicePacketCrossesSteamUnchanged()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AVoicePacketCrossesSteamUnchanged(bool opus)
     {
-        var packet = new VoicePacket(42, 1000, StartsTalk: true, EndsTalk: false, new[] { new byte[] { 1, 2, 3 }, new byte[] { 4 }, new byte[] { 5, 6 } });
+        var packet = new VoicePacket(42, 1000, StartsTalk: true, EndsTalk: false, new[] { new byte[] { 1, 2, 3 }, new byte[] { 4 }, new byte[] { 5, 6 } }, IsOpus: opus);
 
         VoicePacket? read = SteamVoiceWire.Read(SteamVoiceWire.Write(packet));
 
         Assert.NotNull(read);
         Assert.Equal((42u, 1000u, true, false), (read!.Stream, read.Seq, read.StartsTalk, read.EndsTalk));
         Assert.Equal(packet.Chunks, read.Chunks);
+        Assert.Equal(opus, read.IsOpus);
+    }
+
+    [Fact]
+    public void RelayVoiceAuthenticatesCodecSenderAndSequence()
+    {
+        using var sender = new VoiceCrypto(VoiceCrypto.NewKey());
+        using var otherSender = new VoiceCrypto(VoiceCrypto.NewKey());
+        var packet = new VoicePacket(42, 1000, true, false, [new byte[] { 1, 2, 3 }], IsOpus: true);
+        byte[] sealedPacket = sender.Seal(packet);
+
+        VoicePacket read = Assert.IsType<VoicePacket>(sender.Open(sealedPacket));
+        Assert.True(read.IsOpus);
+        Assert.Equal(packet.Chunks, read.Chunks);
+        Assert.Null(otherSender.Open(sealedPacket));
+
+        byte[] changedSequence = (byte[])sealedPacket.Clone();
+        changedSequence[7] ^= 1;
+        Assert.Null(sender.Open(changedSequence));
+        sealedPacket[VoiceCrypto.HeaderSize] ^= 8;
+        Assert.Null(sender.Open(sealedPacket));
     }
 
     [Fact]

@@ -147,6 +147,9 @@ internal sealed class VoiceButton
             case LocalVoiceState.ListenOnly:
                 VoiceGlyphs.Headphones(_control, c, size, VoiceGlyphs.Ink);
                 break;
+            case LocalVoiceState.Asking:
+                VoiceGlyphs.Mic(_control, c, size, VoiceGlyphs.Dim);
+                break;
             case LocalVoiceState.Muted:
                 VoiceGlyphs.Mic(_control, c, size, VoiceGlyphs.Ink);
                 VoiceGlyphs.Slash(_control, c, size, VoiceGlyphs.Stop);

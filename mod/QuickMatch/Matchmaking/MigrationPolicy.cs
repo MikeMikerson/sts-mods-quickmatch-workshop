@@ -7,9 +7,8 @@ namespace QuickMatch.Matchmaking;
 // Matchmaker.
 //
 // - Every client keeps a copy of the run, taken at the game's save moments as the host's save is.
-// - When a client loses the host, the run's players in the run's order, less the old host and anyone absent, are the
-//   order in which they may reopen the run from their copy. Every client knows the same list, so they agree without
-//   talking.
+// - When a client loses the host, desktops may reopen the run first. Within each platform group, candidates stay in
+//   run order. Every client has the same platform list from the original host.
 // - Every candidate searches for the run's lobby first and joins it when found. A client cannot tell the host leaving
 //   from its own connection dropping, and in the second case the host goes on and lists the run under its key. The
 //   first candidate hosts after SearchFirstSeconds of finding nothing, each next one NextHostSeconds later, in case the
@@ -41,11 +40,14 @@ public static class MigrationPolicy
 
     // Leaves out the old host, the players who were absent when the host was lost, and the players voted out of the
     // run.
-    public static List<ulong> HostOrder(IEnumerable<ulong> runPlayers, ulong oldHost, IEnumerable<ulong> present, IEnumerable<ulong>? removed = null)
+    public static List<ulong> HostOrder(IEnumerable<ulong> runPlayers, ulong oldHost, IEnumerable<ulong> present,
+        IEnumerable<ulong>? removed = null, IEnumerable<ulong>? desktopPlayers = null)
     {
         var here = present.ToHashSet();
         var banned = removed?.ToHashSet() ?? [];
-        return runPlayers.Where(p => p != oldHost && here.Contains(p) && !banned.Contains(p)).Distinct().ToList();
+        var desktops = desktopPlayers?.ToHashSet() ?? [];
+        return runPlayers.Where(p => p != oldHost && here.Contains(p) && !banned.Contains(p)).Distinct()
+            .OrderByDescending(desktops.Contains).ToList();
     }
 
     // Seconds after the host was lost at which local reopens the run if no lobby has been found, or null if they never

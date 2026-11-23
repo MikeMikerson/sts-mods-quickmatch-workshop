@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using QuickMatch.Steam;
-using QuickMatch.Transport;
 using QuickMatch.Voice;
 
 namespace QuickMatch.Matchmaking;
@@ -19,7 +18,7 @@ internal enum LinkVerdict
     AscensionTooHigh,
 }
 
-internal readonly record struct LinkLobby(RunMode Mode, int Size, bool AnySize, int Ascension, bool Voice);
+internal readonly record struct LinkLobby(RunMode Mode, int Size, bool AnySize, int Ascension, bool Voice, bool HostOffersSockets);
 
 // A Steam invite or steam://joinlobby link to a quick-match lobby joins through Quick Match, with the checks a search
 // makes by its filters; a host turns away a joiner without Quick Match.
@@ -33,8 +32,17 @@ internal static class LinkPolicy
     public static IReadOnlyList<string> Keys { get; } =
     [
         LobbyKeys.Proto, LobbyKeys.Mode, LobbyKeys.Voice, LobbyKeys.Size, LobbyKeys.Ascension,
-        LobbyKeys.Version, LobbyKeys.Db, LobbyKeys.Mods, .. LobbyLinks.Filters.Keys,
+        LobbyKeys.Version, LobbyKeys.Db, LobbyKeys.Mods, LobbyKeys.Link,
     ];
+
+    public static bool? HostOffersSockets(string? link) => link switch
+    {
+        LobbyKeys.LinkMixed => true,
+        LobbyKeys.LinkChat => false,
+        _ => null,
+    };
+
+    public static bool JoinOverSockets(bool ownSockets, bool hostSockets) => ownSockets && hostSockets;
 
     public static string InviteLink(ulong lobby, ulong host) =>
         string.Create(CultureInfo.InvariantCulture, $"steam://joinlobby/{SteamAppId}/{lobby}/{host}");
@@ -63,7 +71,7 @@ internal static class LinkPolicy
         int ascension = LobbyKeys.ParseInRange(Get(LobbyKeys.Ascension), 0, MatchPolicy.MaxAscension, -1);
         RunMode? mode = MatchMode.All.Where(m => MatchMode.LobbyValue(m) == Get(LobbyKeys.Mode)).Select(m => (RunMode?)m).FirstOrDefault();
         if (Get(LobbyKeys.Proto) != LobbyKeys.ProtoValue
-            || LobbyLinks.Filters.Any(f => Get(f.Key) != f.Value)
+            || HostOffersSockets(Get(LobbyKeys.Link)) is not bool hostOffersSockets
             || size == 0
             || mode == null
             || ascension < 0)
@@ -74,7 +82,7 @@ internal static class LinkPolicy
         {
             return (LinkVerdict.OtherGame, default);
         }
-        var lobby = new LinkLobby(mode.Value, size, anySize, ascension, MatchVoice.ForRun(Get(LobbyKeys.Voice) == LobbyKeys.VoiceOn, voiceChoice));
+        var lobby = new LinkLobby(mode.Value, size, anySize, ascension, MatchVoice.ForRun(Get(LobbyKeys.Voice) == LobbyKeys.VoiceOn, voiceChoice), hostOffersSockets);
         if (!playable(mode.Value))
         {
             return (LinkVerdict.ModeLocked, lobby);

@@ -19,8 +19,7 @@ public class InviteLinkTests
         [LobbyKeys.Version] = Local.Version,
         [LobbyKeys.Db] = Local.Db,
         [LobbyKeys.Mods] = Local.Mods,
-        [LobbyKeys.Pool] = LobbyKeys.PoolDesktop,
-        [LobbyKeys.Link] = LobbyKeys.LinkSockets,
+        [LobbyKeys.Link] = LobbyKeys.LinkMixed,
     };
 
     private static (LinkVerdict Verdict, LinkLobby Lobby) Read(
@@ -73,7 +72,7 @@ public class InviteLinkTests
         (LinkVerdict verdict, LinkLobby lobby) = Read(Lobby());
 
         Assert.Equal(LinkVerdict.Join, verdict);
-        Assert.Equal(new LinkLobby(RunMode.Standard, 3, false, 4, true), lobby);
+        Assert.Equal(new LinkLobby(RunMode.Standard, 3, false, 4, true, HostOffersSockets: true), lobby);
     }
 
     [Fact]
@@ -89,9 +88,9 @@ public class InviteLinkTests
     }
 
     [Theory]
-    [InlineData(LobbyKeys.Proto, "19")]
-    [InlineData(LobbyKeys.Pool, "")]
+    [InlineData(LobbyKeys.Proto, "21")]
     [InlineData(LobbyKeys.Link, "")]
+    [InlineData(LobbyKeys.Link, "sockets")]
     [InlineData(LobbyKeys.Mode, "endless")]
     [InlineData(LobbyKeys.Size, "")]
     public void ALobbyOfAnotherReleaseIsRefused(string key, string value)
@@ -100,6 +99,20 @@ public class InviteLinkTests
         data[key] = value;
 
         Assert.Equal(LinkVerdict.OtherRelease, Read(data).Verdict);
+    }
+
+    [Theory]
+    [InlineData(LobbyKeys.LinkMixed, true)]
+    [InlineData(LobbyKeys.LinkChat, false)]
+    public void AnInviteKeepsTheHostsAdvertisedRoute(string link, bool hostOffersSockets)
+    {
+        Dictionary<string, string> data = Lobby();
+        data[LobbyKeys.Link] = link;
+
+        (LinkVerdict verdict, LinkLobby lobby) = Read(data);
+
+        Assert.Equal(LinkVerdict.Join, verdict);
+        Assert.Equal(hostOffersSockets, lobby.HostOffersSockets);
     }
 
     [Theory]

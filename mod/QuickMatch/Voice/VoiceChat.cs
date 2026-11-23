@@ -1,25 +1,32 @@
 using System;
 using System.Collections.Generic;
-using MegaCrit.Sts2.Core.Platform.Steam;
+using System.Linq;
 using QuickMatch.Lobby;
+using QuickMatch.Matchmaking;
 using QuickMatch.Patches;
+using QuickMatch.Transport;
+#if !IPHONE
 using QuickMatch.Platforms.Desktop;
 using Steamworks;
+#endif
 
 namespace QuickMatch.Voice;
 
-// One VoiceSession per match. The match's host and clients call TickSteam every frame and End when the match
-// connection closes. Game thread only.
+// One VoiceSession per match. The match's host and clients tick it every frame and end it when the connection closes.
+// Game thread only.
 internal static class VoiceChat
 {
     // Without a tick for this long the transport stopped updating and the match is over.
     private const long MatchGoneMs = 1500;
 
     private static VoiceSession? _session;
+#if !IPHONE
     private static SteamVoiceRoom? _steam;
-    private static IVoiceDevice? _device;
     private static SteamVoiceDecoder? _decoder;
+#endif
+    private static RelayLink? _relay;
     private static GodotVoiceOutput? _godotOutput;
+    private static readonly VoiceRoster _roster = new();
     // Null until the first tick: a long.MinValue start would overflow in InMatch and read as in a match.
     private static long? _lastTickAt;
 
@@ -31,15 +38,17 @@ internal static class VoiceChat
 
     public static IReadOnlyCollection<ulong> Members => _session?.Members ?? (IReadOnlyCollection<ulong>)Array.Empty<ulong>();
 
+    public static IEnumerable<(ulong Player, TeammateState State)> Teammates => _roster.Teammates;
+
+    // The match's voice goes over the relay, which is not connected; play goes on without it.
+    public static bool RelayVoiceDown => _session?.Link is RelayLink { IsUp: false }
+        && _roster.Teammates.Any(teammate => teammate.State == TeammateState.NoVoice);
+
     public static ulong LocalId => LobbyBackend.Current.LocalId;
 
     public static string NameOf(ulong player)
     {
         string? name = LobbyBackend.Current.PlayerName(player) ?? VoiceStore.RememberedName(player);
-        if (name == null && SteamInitializer.Initialized)
-        {
-            name = SteamFriends.GetFriendPersonaName(new CSteamID(player));
-        }
         return string.IsNullOrEmpty(name) ? player.ToString() : name;
     }
 
@@ -77,10 +86,11 @@ internal static class VoiceChat
         _session?.MuteEveryone();
     }
 
-    // Called every frame by the match's host (SocketsHost) and its clients (the game's Steam client).
+#if !IPHONE
+    // Called every frame by the match's host (MixedHost) and its clients (the game's Steam client).
     public static void TickSteam(ulong lobby)
     {
-        if (!GamePatches.IsOn(GameFeature.Voice))
+        if (!Features.IsOn(GameFeature.Voice))
         {
             return;
         }
@@ -103,50 +113,125 @@ internal static class VoiceChat
                 return;
             }
             _steam = room;
-            Begin(room);
+            Begin(room, "Steam");
         }
         if (_session == null || _steam == null)
         {
             return;
         }
-        _steam.Receive((from, packet) => _session?.Receive(from, packet));
         Apply(VoiceStore.Settings, _session);
         _session.SetMembers(_steam.Members);
+        _roster.Update(lobby, LocalId, LobbyBackend.Current.Members(lobby), _session.Members);
+        _steam.Receive(_session.Receive);
         _session.Update(now);
+    }
+#endif
+
+    public static void TickRelay(RelayRoute? route, ulong lobby)
+    {
+        if (!Features.IsOn(GameFeature.Voice))
+        {
+            return;
+        }
+        long now = System.Environment.TickCount64;
+        _lastTickAt = now;
+        if (_relay == null || _relay.Route != route)
+        {
+            DetachRelay();
+            _relay = new RelayLink(route);
+            if (_session == null)
+            {
+                Begin(_relay, "the relay");
+            }
+            else
+            {
+                _session.SwitchLink(_relay);
+                MainFile.Logger.Info("voice: switched to Opus over the relay");
+            }
+            if (route != null)
+            {
+                route.VoiceReceived = ReceiveRelay;
+            }
+        }
+        if (_session is { } session)
+        {
+            Apply(VoiceStore.Settings, session);
+            session.SetMembers(route?.VoiceMembers ?? Array.Empty<ulong>());
+            _roster.Update(lobby, LocalId, LobbyBackend.Current.Members(lobby), session.Members);
+            session.Update(now);
+        }
+    }
+
+    private static void ReceiveRelay(ulong sender, VoicePacket packet)
+    {
+        if (MatchVoice.On)
+        {
+            _session?.Receive(sender, packet);
+        }
+    }
+
+    private sealed class RelayLink(RelayRoute? route) : IVoiceLink
+    {
+        public RelayRoute? Route => route;
+        public bool UsesOpus => true;
+        public bool IsUp => route?.VoiceUp == true;
+        public void Send(VoicePacket packet) => route?.SendVoice(packet);
+    }
+
+    private static void DetachRelay()
+    {
+        if (_relay?.Route is { } route)
+        {
+            route.VoiceReceived = null;
+        }
+        _relay = null;
     }
 
     public static void End()
     {
+        DetachRelay();
         _session?.Dispose();
         _session = null;
+#if !IPHONE
         _steam?.Dispose();
         _steam = null;
+#endif
     }
 
     public static bool IsFriend(ulong player)
     {
-        if (!SteamInitializer.Initialized)
+#if !IPHONE
+        if (QuickMatchHostService.HasSockets)
         {
-            return false;
+            return SteamFriends.GetFriendRelationship(new CSteamID(player)) == EFriendRelationship.k_EFriendRelationshipFriend;
         }
-        return SteamFriends.GetFriendRelationship(new CSteamID(player)) == EFriendRelationship.k_EFriendRelationshipFriend;
+#endif
+        return false;
     }
 
-    private static void Begin(IVoiceLink link)
+    private static void Begin(IVoiceLink link, string transport)
     {
-        _device ??= SteamVoiceDevice.TryCreate();
-        IVoiceDevice? device = _device;
-        IVoiceOutput output = _godotOutput ??= new GodotVoiceOutput();
-        var session = new VoiceSession(LocalId, device, _decoder ??= new SteamVoiceDecoder(), output, VoiceStore.Mutes, IsFriend,
-            line => MainFile.Logger.Info(line))
+        IVoiceDevice? device = VoiceDevice.Current;
+#if IPHONE
+        IVoiceDecoder? steamDecoder = null;
+#else
+        if (device == null && QuickMatchHostService.HasSockets)
+        {
+            VoiceDevice.Current = device = SteamVoiceDevice.TryCreate();
+        }
+        IVoiceDecoder steamDecoder = _decoder ??= new SteamVoiceDecoder();
+#endif
+        IVoiceOutput output = device as IVoiceOutput ?? (_godotOutput ??= new GodotVoiceOutput());
+        var session = new VoiceSession(LocalId, device, steamDecoder, output, VoiceStore.Mutes, IsFriend,
+            line => MainFile.Logger.Info(line), isBlocked: BlockStore.IsBlocked)
         {
             Link = link,
         };
         Apply(VoiceStore.Settings, session);
         _session = session;
         MainFile.Logger.Info(MatchVoice.On
-            ? $"voice: ready for this match over Steam, microphone {device?.CaptureState.ToString() ?? "none (listening only)"}"
-            : "voice: off for us in this match (shown to the others over Steam); nothing recorded or played");
+            ? $"voice: ready for this match over {transport}, microphone {device?.CaptureState.ToString() ?? "none (listening only)"}"
+            : $"voice: off for us in this match over {transport}; nothing recorded or played");
     }
 
     private static void Apply(VoiceSettings settings, VoiceSession session)

@@ -219,7 +219,7 @@ internal static partial class Matchmaker
     private static void SendStartShort(StartShortMessage kind, int players, byte round)
     {
         byte[] message = StartShortWire.Write(kind, players, round);
-        if (!LobbyBackend.Current.SendChat(SteamLobbyId, message, message.Length))
+        if (!LobbyBackend.Current.SendChat(SteamLobbyId, message, message.Length, 0))
         {
             MainFile.Logger.Warn($"lobby {SteamLobbyId}: could not send the start-short {kind}");
         }

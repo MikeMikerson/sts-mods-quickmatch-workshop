@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using MegaCrit.Sts2.Core.Entities.Multiplayer;
@@ -14,6 +15,7 @@ using QuickMatch.Lobby;
 using QuickMatch.Steam;
 using QuickMatch.Transport;
 using QuickMatch.Ui;
+using QuickMatch.Voice;
 
 namespace QuickMatch.Matchmaking;
 
@@ -33,7 +35,7 @@ internal static partial class Matchmaker
             {
                 List<LobbyCandidate> found = await LobbySearch.FindAsync(RandomSize ? 0 : Size, ct, nearby: nearby);
                 List<LobbyCandidate> usable = MatchPolicy.Rank(found, SteamLobbyId, IsRecentlyFailed, _allowed, RandomSize);
-                MainFile.Logger.Info($"search round {round}{(nearby ? " nearby" : "")}: {usable.Count} of {found.Count} with qm_asc in [{string.Join(",", _allowed)}]{(RandomSize ? ", fewest free slots first" : "")}");
+                MainFile.Logger.Info($"search round {round}{(nearby ? " nearby" : "")}: {usable.Count} of {found.Count} with qm_asc in [{string.Join(",", _allowed)}]");
                 return usable;
             });
             foreach (LobbyCandidate candidate in ranked.Take(MaxJoinAttemptsPerRound))
@@ -107,10 +109,22 @@ internal static partial class Matchmaker
     // host holds it for the party's next room.
     private static async Task<(JoinFlow Flow, JoinResult Result, RejoinClient? Rejoin)?> ConnectAsync(ulong lobbyId, CancellationToken ct, bool rejoin = false)
     {
+        if (LobbyLinks.OffersSockets(lobbyId) is not bool hostOffersSockets)
+        {
+            return null;
+        }
+        IClientConnectionInitializer connection;
+        if (LinkPolicy.JoinOverSockets(QuickMatchHostService.HasSockets, hostOffersSockets))
+        {
+            MainFile.Logger.Info($"joining lobby {lobbyId} over Steam sockets");
+            connection = SocketsConnection(lobbyId);
+        }
+        else
+        {
+            connection = ChatConnectionInitializer.FromLobby(lobbyId);
+        }
         var service = new NetClientGameService(PeerVersionInfo.LocalDefault());
         RejoinClient? watcher = rejoin ? new RejoinClient(service) : null;
-        MainFile.Logger.Info($"joining lobby {lobbyId} over Steam sockets");
-        IClientConnectionInitializer connection = SteamClientConnectionInitializer.FromLobby(lobbyId);
         JoinFlow flow = GameVersions.NewJoinFlow(service, connection);
         _flow = flow;
         bool finished = false;
@@ -155,6 +169,10 @@ internal static partial class Matchmaker
         }
     }
 
+    // Keep Steam's connection initializer out of the phone's join path.
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static IClientConnectionInitializer SocketsConnection(ulong lobbyId) => SteamClientConnectionInitializer.FromLobby(lobbyId);
+
     private static async Task CancelJoinAfterTimeoutAsync(JoinFlow flow, Func<bool> finished, CancellationToken ct)
     {
         try
@@ -182,7 +200,7 @@ internal static partial class Matchmaker
         }
         AnySize = RandomSize;
         var netService = new QuickMatchHostService();
-        NetErrorInfo? error = await netService.StartQuickMatchHost(Size);
+        NetErrorInfo? error = await netService.StartQuickMatchHost(Size, MatchVoice.On);
         if (ct.IsCancellationRequested)
         {
             if (netService.IsConnected)

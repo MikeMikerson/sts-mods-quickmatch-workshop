@@ -9,9 +9,9 @@ using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.Multiplayer.Game.Lobby;
 using MegaCrit.Sts2.Core.Nodes;
 using MegaCrit.Sts2.Core.Nodes.Screens.MainMenu;
-using MegaCrit.Sts2.Core.Platform;
 using MegaCrit.Sts2.Core.Runs;
 using QuickMatch.Localization;
+using QuickMatch.Lobby;
 using QuickMatch.Ui;
 using QuickMatch.Voice;
 
@@ -49,7 +49,7 @@ internal static partial class Regroup
             // A run launches a few seconds after embarking; an old marker belongs to a start that failed.
             if (Godot.Time.GetTicksMsec() - pending.At < PendingRunMaxAgeMs)
             {
-                RunRecord.Save(state, pending.HostId, pending.Size, pending.Voice);
+                RunRecord.Save(state, pending.HostId, pending.Size, pending.Voice, pending.DesktopPlayers);
             }
         }
         InQuickMatchRun = RunRecord.Matches(state);
@@ -156,7 +156,7 @@ internal static partial class Regroup
             {
                 return;
             }
-            Notice.Show(Loc.With("QUICKMATCH.NOTICE.dropped", "player", PlatformUtil.GetPlayerName(PlatformType.Steam, player)));
+            Notice.Show(Loc.With("QUICKMATCH.NOTICE.dropped", "player", LobbyBackend.NameOf(player)));
         }
         catch (Exception e)
         {
@@ -171,7 +171,7 @@ internal static partial class Regroup
         {
             if (InQuickMatchRun && player.id != RunRecord.LocalPlayerId())
             {
-                Notice.Show(Loc.With("QUICKMATCH.NOTICE.back", "player", PlatformUtil.GetPlayerName(PlatformType.Steam, player.id)));
+                Notice.Show(Loc.With("QUICKMATCH.NOTICE.back", "player", LobbyBackend.NameOf(player.id)));
                 NetworkProblemMark.Recheck(player.id);
             }
         }
@@ -185,6 +185,14 @@ internal static partial class Regroup
     {
         if (InQuickMatchRun)
         {
+            try
+            {
+                RecentStore.NoteRunEnded(_present.Select(player => (player, BlockPlayers.KnownName(player))));
+            }
+            catch (Exception e)
+            {
+                MainFile.Logger.Warn($"could not note the run's players: {e.Message}");
+            }
             RunRecord.Clear("run ended");
         }
     }

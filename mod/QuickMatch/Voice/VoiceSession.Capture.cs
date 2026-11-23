@@ -1,3 +1,5 @@
+using System;
+
 namespace QuickMatch.Voice;
 
 internal sealed partial class VoiceSession
@@ -20,16 +22,38 @@ internal sealed partial class VoiceSession
             _capturing = true;
             _frameCount = 0;
             _previousChunk = null;
+            _hasPreviousFrame = false;
             _heardAt = _now - MicQuietMs;
             _gate.Reset();
         }
-        while (_device!.ReadVoice() is { } chunk)
+        if (Link!.UsesOpus && _device is IPcmVoiceDevice device)
         {
-            CaptureChunk(chunk);
+            int count;
+            while ((count = device.ReadCapture(_decoded)) > 0)
+            {
+                CaptureOpus(_decoded.AsSpan(0, count));
+            }
+        }
+        else if (_steamDecoder != null)
+        {
+            while (_device!.ReadVoice() is { } chunk)
+            {
+                int count = _steamDecoder.Decompress(chunk, _decoded);
+                if (Link.UsesOpus)
+                {
+                    CaptureOpus(_decoded.AsSpan(0, count));
+                }
+                else
+                {
+                    CaptureChunk(chunk, count);
+                }
+            }
         }
         if (_now - _heardAt >= MicQuietMs)
         {
             _previousChunk = null;
+            _hasPreviousFrame = false;
+            _frameCount = 0;
             if (_sending)
             {
                 _sending = false;
@@ -43,11 +67,50 @@ internal sealed partial class VoiceSession
         }
     }
 
+    private void CaptureOpus(ReadOnlySpan<short> samples)
+    {
+        while (!samples.IsEmpty)
+        {
+            _heardAt = _now;
+            int count = Math.Min(samples.Length, _frame.Length - _frameCount);
+            samples[..count].CopyTo(_frame.AsSpan(_frameCount));
+            _frameCount += count;
+            samples = samples[count..];
+            if (_frameCount < _frame.Length)
+            {
+                continue;
+            }
+            _frameCount = 0;
+            if (_gate.Process(_frame))
+            {
+                _encoder ??= new VoiceEncoder();
+                if (!_sending)
+                {
+                    _sending = true;
+                    _startsTalk = true;
+                    _encoder.Reset();
+                    if (_hasPreviousFrame)
+                    {
+                        Queue(_encoder.Encode(_previousFrame!), _frame.Length);
+                    }
+                }
+                Queue(_encoder.Encode(_frame), _frame.Length);
+            }
+            else if (_sending)
+            {
+                _sending = false;
+                Flush(endsTalk: true);
+            }
+            _previousFrame ??= new short[_frame.Length];
+            _frame.CopyTo(_previousFrame, 0);
+            _hasPreviousFrame = true;
+        }
+    }
+
     // The gate judges the chunk by its own decoded audio, in whole frames; the rest of a frame waits for the next chunk.
-    private void CaptureChunk(byte[] chunk)
+    private void CaptureChunk(byte[] chunk, int samples)
     {
         _heardAt = _now;
-        int samples = _decoder.Decompress(chunk, _decoded);
         bool open = false;
         bool judged = false;
         for (int i = 0; i < samples; i++)
@@ -107,11 +170,11 @@ internal sealed partial class VoiceSession
         {
             return;
         }
-        var packet = new VoicePacket(_stream, _packetSeq++, _startsTalk, endsTalk, _outgoing.ToArray());
+        var packet = new VoicePacket(_stream, _packetSeq++, _startsTalk, endsTalk, _outgoing.ToArray(), Link?.UsesOpus == true);
         _outgoing.Clear();
         _outgoingSamples = 0;
         _startsTalk = false;
-        if (Link is { IsUp: true } link)
+        if (Enabled && MicOn && Link is { IsUp: true } link)
         {
             link.Send(packet);
             _packetsSent++;
@@ -138,7 +201,7 @@ internal sealed partial class VoiceSession
 
     private void UpdateStatus()
     {
-        if (Link is not { IsUp: true } link)
+        if (Link is not { IsUp: true } link || (link.UsesOpus && !Enabled))
         {
             _statusSent = null;
             return;

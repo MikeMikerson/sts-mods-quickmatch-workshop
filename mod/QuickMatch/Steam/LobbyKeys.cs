@@ -11,7 +11,7 @@ internal static class LobbyKeys
     public const string Proto = "qm_proto";
     // Bumped whenever the lobby keys, the game messages (new ones shift the message ids) or a rule every player must
     // follow change, so players of different releases never find each other's lobbies.
-    public const string ProtoValue = "20";
+    public const string ProtoValue = "24";
 
     // "2" to "4", or SizeAny.
     public const string Size = "qm_size";
@@ -46,17 +46,16 @@ internal static class LobbyKeys
     // client); the host refuses a joiner below it.
     public const string Ascension = "qm_asc";
 
-    // Written by every host, which takes the game's Steam sockets, and filtered on by every search (LobbyLinks.Filters).
+    // Every host accepts lobby chat. A mixed host also accepts the game's Steam sockets.
     public const string Link = "qm_link";
-    public const string LinkSockets = "sockets";
-    public const string Pool = "qm_pool";
-    public const string PoolDesktop = "desktop";
+    public const string LinkMixed = "mixed";
+    public const string LinkChat = "chat";
 
     // Marker of a host reopening a saved quick-match run. Kept apart from Proto, so normal quick-match searches never
     // list these lobbies.
     public const string ResumeProto = "qm_rproto";
     // Bumped with ProtoValue whenever a change also affects resume lobbies.
-    public const string ResumeProtoValue = "19";
+    public const string ResumeProtoValue = "23";
 
     // Seed and players of the saved run; only players of that run search for it.
     public const string ResumeKey = "qm_resume";

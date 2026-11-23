@@ -94,13 +94,17 @@ internal static class LookLayout
     }
 
     // Top to bottom, then the buttons left to right.
-    public static IReadOnlyList<PlayerControl> PlayerControls(bool voice, bool blockable, bool canVote)
+    public static IReadOnlyList<PlayerControl> PlayerControls(bool voice, bool emotes, bool blockable, bool canVote)
     {
         var controls = new List<PlayerControl>();
         if (voice)
         {
             controls.Add(PlayerControl.Mute);
             controls.Add(PlayerControl.Volume);
+        }
+        if (emotes)
+        {
+            controls.Add(PlayerControl.Emotes);
         }
         if (blockable)
         {
@@ -131,6 +135,7 @@ internal enum MenuTab
 {
     Voice,
     Blocked,
+    Recent,
 }
 
 internal enum VoiceRow
@@ -156,6 +161,7 @@ internal enum PlayerControl
 {
     Mute,
     Volume,
+    Emotes,
     Block,
     Vote,
     Close,

@@ -21,7 +21,8 @@ namespace QuickMatch.Matchmaking;
 // the record, so it never reaches another run. Removed: players voted out of this run; every host this run has from
 // then on refuses them, and the resume search skips a lobby they host. Every voter writes it, so it outlives a
 // migration; it goes with the record.
-internal sealed record RunRecord(string Key, ulong HostId, List<ulong> PlayerIds, int Size, long StartedAt, bool NoVoice = false, List<ulong>? StayedWith = null, List<ulong>? Removed = null)
+internal sealed record RunRecord(string Key, ulong HostId, List<ulong> PlayerIds, int Size, long StartedAt, bool NoVoice = false,
+    List<ulong>? StayedWith = null, List<ulong>? Removed = null, ulong[]? DesktopPlayers = null)
 {
     private const string FileName = "quickmatch_run.json";
     private static readonly TimeSpan MaxAge = TimeSpan.FromDays(7);
@@ -65,9 +66,10 @@ internal sealed record RunRecord(string Key, ulong HostId, List<ulong> PlayerIds
 
     public IReadOnlyCollection<ulong> Banned => Removed ?? [];
 
-    public static void Save(RunState state, ulong hostId, int size, bool voice)
+    public static void Save(RunState state, ulong hostId, int size, bool voice, ulong[]? desktopPlayers)
     {
-        var record = new RunRecord(KeyOf(state), hostId, state.Players.Select(p => p.NetId).ToList(), size, DateTimeOffset.UtcNow.ToUnixTimeSeconds(), !voice);
+        var record = new RunRecord(KeyOf(state), hostId, state.Players.Select(p => p.NetId).ToList(), size,
+            DateTimeOffset.UtcNow.ToUnixTimeSeconds(), !voice, DesktopPlayers: desktopPlayers);
         if (Write(record))
         {
             MainFile.Logger.Info($"run record saved: key={record.Key} host={hostId} players={string.Join(",", record.PlayerIds)} seed={state.Rng.StringSeed} {(global::QuickMatch.Voice.MatchVoice.Text(voice))}");

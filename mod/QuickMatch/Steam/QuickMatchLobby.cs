@@ -3,6 +3,7 @@ using MegaCrit.Sts2.Core.Entities.Multiplayer;
 using MegaCrit.Sts2.Core.Multiplayer;
 using QuickMatch.Lobby;
 using QuickMatch.Matchmaking;
+using QuickMatch.Transport;
 using QuickMatch.Voice;
 
 namespace QuickMatch.Steam;
@@ -40,20 +41,15 @@ internal static class QuickMatchLobby
         Backend.SetData(lobby, LobbyKeys.Mods, key.Mods);
         Backend.SetData(lobby, LobbyKeys.CreatedAt, createdAt.ToString(CultureInfo.InvariantCulture));
         Backend.SetData(lobby, LobbyKeys.Members, "1");
-        SetLink(lobby);
+        string link = CurrentLink;
+        Backend.SetData(lobby, LobbyKeys.Link, link);
         // Marker last, so a lobby only matches searches once it is fully described.
         Backend.SetData(lobby, LobbyKeys.Proto, LobbyKeys.ProtoValue);
         bool isPublic = Backend.SetKind(lobby, LobbyKind.Public);
-        MainFile.Logger.Info($"published lobby {lobby} size={sizeValue} {MatchMode.Text(MatchMode.On)} {MatchVoice.Text(MatchVoice.On)} qm_asc={ascension} t={createdAt} {key} {LinkText} public={isPublic}");
+        MainFile.Logger.Info($"published lobby {lobby} size={sizeValue} {MatchMode.Text(MatchMode.On)} {MatchVoice.Text(MatchVoice.On)} qm_asc={ascension} t={createdAt} {key} link={link} public={isPublic}");
     }
 
-    private static void SetLink(ulong lobby)
-    {
-        Backend.SetData(lobby, LobbyKeys.Link, LobbyKeys.LinkSockets);
-        Backend.SetData(lobby, LobbyKeys.Pool, LobbyKeys.PoolDesktop);
-    }
-
-    private const string LinkText = "link=sockets pool=desktop";
+    private static string CurrentLink => QuickMatchHostService.HasSockets ? LobbyKeys.LinkMixed : LobbyKeys.LinkChat;
 
     public static void UpdateMembers(ulong lobby, int members)
     {
@@ -91,19 +87,9 @@ internal static class QuickMatchLobby
     // Strangers cannot get in: they do not know the key, and the game's load lobby turns away anyone not in the save.
     public static void PublishResume(ulong lobby, string runKey)
     {
-        Backend.SetData(lobby, LobbyKeys.Version, CompatKey.Local().Version);
-        Backend.SetData(lobby, LobbyKeys.ResumeKey, runKey);
-        if (Backend.Owner(lobby) is var owner and not 0)
-        {
-            Backend.SetData(lobby, LobbyKeys.ResumeHost, owner.ToString(CultureInfo.InvariantCulture));
-        }
-        SetLink(lobby);
-        // A run's own lobby, listed while a player is absent, may still carry the match marker: a search for players must
-        // not count or join it.
-        Backend.DeleteData(lobby, LobbyKeys.Proto);
-        Backend.SetData(lobby, LobbyKeys.ResumeProto, LobbyKeys.ResumeProtoValue);
-        bool isPublic = Backend.SetKind(lobby, LobbyKind.Public);
-        MainFile.Logger.Info($"published resume lobby {lobby} key={runKey} {LinkText} public={isPublic}");
+        string link = CurrentLink;
+        bool isPublic = ResumeLobby.Publish(Backend, lobby, runKey, CompatKey.Local().Version, link);
+        MainFile.Logger.Info($"published resume lobby {lobby} key={runKey} link={link} public={isPublic}");
     }
 
     // True only for a lobby we own.
@@ -112,12 +98,7 @@ internal static class QuickMatchLobby
         return Backend.GetData(lobby, LobbyKeys.ResumeProto) == LobbyKeys.ResumeProtoValue;
     }
 
-    public static void UnpublishResume(ulong lobby)
-    {
-        Backend.DeleteData(lobby, LobbyKeys.ResumeProto);
-        Backend.DeleteData(lobby, LobbyKeys.ResumeKey);
-        Backend.DeleteData(lobby, LobbyKeys.ResumeHost);
-    }
+    public static void UnpublishResume(ulong lobby) => ResumeLobby.Unpublish(Backend, lobby);
 
     // The game closes its lobby when the run starts (private) and reopens it as friends only. Our lobbies: closed
     // drops the marker and goes private, open stays public. A reopened run is unlisted and private once it starts.

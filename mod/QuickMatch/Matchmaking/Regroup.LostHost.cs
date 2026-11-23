@@ -40,7 +40,7 @@ internal static partial class Regroup
             // The record lists the run's players in the run's order. The game has already emptied its run lobby's list
             // by now, so the players present are our copy of it; we are present ourselves.
             var present = _present.Append(local);
-            var order = MigrationPolicy.HostOrder(record.PlayerIds, oldHost, present, record.Banned);
+            var order = MigrationPolicy.HostOrder(record.PlayerIds, oldHost, present, record.Banned, record.DesktopPlayers);
             bool hasCopy = HostCopy.Has(record.Key);
             bool asks = MigrationPolicy.AsksBeforeHosting(oldHost, record.Banned);
             MainFile.Logger.Info($"host order after {oldHost}: {string.Join(",", order)}; we hold {(hasCopy ? "a" : "no")} copy of the run; {(asks ? "each is asked before reopening it" : "the host was voted out, so nobody is asked")}");

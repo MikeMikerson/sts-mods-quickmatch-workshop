@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Quick Match's Steam lobbies for the Android StS2 Launcher, on the launcher's SteamKit2. This is not
+    a mod of its own: the versioned QuickMatch build embeds it and loads it only inside the
+    launcher. It is a separate assembly because one of its classes derives from a SteamKit2 class, and
+    the game reads every type of a mod when it loads it: on desktop, which has no SteamKit2, that type
+    would fail to load and take the whole mod with it. Its public members use .NET types only, and it
+    knows nothing of QuickMatch, so QuickMatch's own types load anywhere.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <AssemblyName>QuickMatch.SteamKit</AssemblyName>
+    <RootNamespace>QuickMatch.SteamKit</RootNamespace>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <!-- QuickMatch embeds this very file, so it needs the implementation, not a reference assembly. -->
+    <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
+    <DebugType>none</DebugType>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <EnableSourceControlManagerQueries>false</EnableSourceControlManagerQueries>
+    <PathMap>$(MSBuildProjectDirectory)/=/_/</PathMap>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The Android launcher supplies SteamKit2 at run time. -->
+    <PackageReference Include="SteamKit2" Version="3.4.0" ExcludeAssets="runtime" />
+  </ItemGroup>
+</Project>

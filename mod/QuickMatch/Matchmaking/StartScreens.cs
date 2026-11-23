@@ -27,8 +27,8 @@ internal static class StartScreens
     {
         (GameMode.Standard, false) => RunMode.Standard,
 #if !GAME_0111
-        (GameMode.Blitz, false) when GamePatches.IsOn(GameFeature.Blitz) => RunMode.Blitz,
-        (GameMode.Dread, false) when GamePatches.IsOn(GameFeature.Dread) => RunMode.Dread,
+        (GameMode.Blitz, false) when Features.IsOn(GameFeature.Blitz) => RunMode.Blitz,
+        (GameMode.Dread, false) when Features.IsOn(GameFeature.Dread) => RunMode.Dread,
 #endif
         _ => null,
     };
@@ -41,8 +41,8 @@ internal static class StartScreens
 #if GAME_0111
         RunMode.Blitz or RunMode.Dread => false,
 #else
-        RunMode.Blitz => GamePatches.IsOn(GameFeature.Blitz) && SaveManager.Instance?.IsEpochRevealed<BlitzEpoch>() == true,
-        RunMode.Dread => GamePatches.IsOn(GameFeature.Dread) && SaveManager.Instance?.IsEpochRevealed<DreadEpoch>() == true,
+        RunMode.Blitz => Features.IsOn(GameFeature.Blitz) && SaveManager.Instance?.IsEpochRevealed<BlitzEpoch>() == true,
+        RunMode.Dread => Features.IsOn(GameFeature.Dread) && SaveManager.Instance?.IsEpochRevealed<DreadEpoch>() == true,
 #endif
         _ => true,
     };

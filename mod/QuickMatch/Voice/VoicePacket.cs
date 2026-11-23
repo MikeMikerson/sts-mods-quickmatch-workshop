@@ -8,27 +8,27 @@ namespace QuickMatch.Voice;
 internal enum VoiceStatus : byte
 {
     Off = 0,
-    // They hear the others but cannot talk (Steam cannot record their microphone).
+    // They hear the others but cannot record their microphone.
     ListenOnly = 1,
     Muted = 2,
     // Their mic is on; they may be silent.
     Live = 3,
 }
 
-// A few consecutive chunks of one speaker's Steam voice, as Steam's GetVoice returned them. Stream is a random number
-// the speaker picks for each voice session; Seq counts the stream's packets, so a receiver drops one that comes after
-// a later one and never decodes the same one twice.
+// Stream identifies a speaker's voice session. Seq orders its packets.
 //
-//   chunks part = flags u8 | chunk count u8 | (length u16 | Steam's bytes) per chunk
+//   chunks part = flags u8 | chunk count u8 | (length u16 | encoded audio) per chunk
 //
 // Flags: 1 = the first packet after silence, 2 = the last packet before silence, 4 = a status packet, whose one
 // 1-byte chunk is the sender's VoiceStatus (sent when it changes and every few seconds, under its own stream number).
-// Numbers are little-endian. Steam carries it as it is (SteamVoiceWire).
-internal sealed record VoicePacket(uint Stream, uint Seq, bool StartsTalk, bool EndsTalk, IReadOnlyList<byte[]> Chunks)
+// Flag 8 selects Opus. With it clear, audio is in Steam's own format. Numbers are little-endian.
+internal sealed record VoicePacket(uint Stream, uint Seq, bool StartsTalk, bool EndsTalk, IReadOnlyList<byte[]> Chunks,
+    bool IsOpus = false)
 {
     private const byte StartFlag = 1;
     private const byte EndFlag = 2;
     private const byte StatusFlag = 4;
+    private const byte OpusFlag = 8;
 
     // Set on a status packet, which carries no audio.
     public VoiceStatus? Status { get; private init; }
@@ -51,7 +51,7 @@ internal sealed record VoicePacket(uint Stream, uint Seq, bool StartsTalk, bool 
             length += 2 + chunk.Length;
         }
         var part = new byte[length];
-        part[0] = (byte)((StartsTalk ? StartFlag : 0) | (EndsTalk ? EndFlag : 0));
+        part[0] = (byte)((StartsTalk ? StartFlag : 0) | (EndsTalk ? EndFlag : 0) | (IsOpus ? OpusFlag : 0));
         part[1] = (byte)Chunks.Count;
         int at = 2;
         foreach (byte[] chunk in Chunks)
@@ -79,7 +79,7 @@ internal sealed record VoicePacket(uint Stream, uint Seq, bool StartsTalk, bool 
                 ? ForStatus(stream, seq, (VoiceStatus)part[4])
                 : null;
         }
-        if (count is 0 or > VoiceFormat.MaxChunksPerPacket || (flags & ~(StartFlag | EndFlag)) != 0)
+        if (count is 0 or > VoiceFormat.MaxChunksPerPacket || (flags & ~(StartFlag | EndFlag | OpusFlag)) != 0)
         {
             return null;
         }
@@ -100,6 +100,8 @@ internal sealed record VoicePacket(uint Stream, uint Seq, bool StartsTalk, bool 
             chunks[i] = part.Slice(at, length).ToArray();
             at += length;
         }
-        return at == part.Length ? new VoicePacket(stream, seq, (flags & StartFlag) != 0, (flags & EndFlag) != 0, chunks) : null;
+        return at == part.Length
+            ? new VoicePacket(stream, seq, (flags & StartFlag) != 0, (flags & EndFlag) != 0, chunks, (flags & OpusFlag) != 0)
+            : null;
     }
 }

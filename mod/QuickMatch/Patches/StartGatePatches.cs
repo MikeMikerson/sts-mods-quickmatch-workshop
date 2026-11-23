@@ -31,6 +31,7 @@ public static class StartGatePatches
         {
             if (!Matchmaker.BlocksStart(__instance))
             {
+                Matchmaker.ShareDesktopRoster(__instance);
                 return true;
             }
             MainFile.Logger.Info($"start gate: waiting for {__instance.Players.Count}/{Matchmaker.StartSize} players");

@@ -216,11 +216,9 @@ internal static partial class RunRejoin
         {
             return;
         }
-        _listed = list;
         if (list)
         {
             QuickMatchLobby.PublishResume(steamLobby, record.Key);
-            LobbyBackend.Current.SetJoinable(steamLobby, true);
             MainFile.Logger.Info($"run lobby {steamLobby} listed for {absent} absent player(s)");
         }
         else
@@ -229,6 +227,7 @@ internal static partial class RunRejoin
             LobbyBackend.Current.SetKind(steamLobby, LobbyKind.Private);
             MainFile.Logger.Info($"run lobby {steamLobby} private again: no one absent");
         }
+        _listed = list;
     }
 
     private static object? Field(object instance, string name) =>

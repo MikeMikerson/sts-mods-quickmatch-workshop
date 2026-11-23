@@ -92,12 +92,16 @@ public interface ILobbyBackend
     // Ourselves included.
     IReadOnlyList<ulong> Members(ulong lobby);
 
-    // To every member, ourselves included.
-    bool SendChat(ulong lobby, byte[] data, int length);
+    // target is 0 for every member, ourselves included, or one member's ID where the backend can limit it to them;
+    // Steamworks always sends to every member.
+    bool SendChat(ulong lobby, byte[] data, int length, ulong target);
 
     string? PlayerName(ulong id);
 
     // Steam's "Ignored" relationship, from the friends list Steam sends at sign-in. QuickMatch treats such a player as
     // on its block list.
     bool BlockedOnSteam(ulong id);
+
+    // Shows the player's Steam profile in the Steam overlay. False where there is no overlay to show it in.
+    bool ShowProfile(ulong id);
 }

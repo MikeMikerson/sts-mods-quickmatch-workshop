@@ -8,6 +8,7 @@ namespace QuickMatch.Voice;
 internal interface IVoiceLink
 {
     bool IsUp { get; }
+    bool UsesOpus => false;
 
     void Send(VoicePacket packet);
 }
@@ -19,6 +20,7 @@ internal enum LocalVoiceState
     Unavailable,
     // Steam cannot record on this device.
     ListenOnly,
+    Asking,
     Muted,
     // Mic on, nothing being sent (silence).
     Live,
@@ -47,6 +49,7 @@ internal sealed partial class VoiceSession : IDisposable
     {
         public readonly JitterBuffer Buffer = new();
         public readonly VoiceLimiter Limiter = new();
+        public VoiceDecoder? Opus;
         public long SpeakingUntil = long.MinValue;
         public VoiceStatus? Status;
         public long WindowStart;
@@ -58,10 +61,11 @@ internal sealed partial class VoiceSession : IDisposable
 
     private readonly ulong _local;
     private readonly IVoiceDevice? _device;
-    private readonly IVoiceDecoder _decoder;
+    private readonly IVoiceDecoder? _steamDecoder;
     private readonly IVoiceOutput _output;
     private readonly VoiceMutes _mutes;
     private readonly Func<ulong, bool> _isFriend;
+    private readonly Func<ulong, bool>? _isBlocked;
     private readonly Action<string>? _log;
     private readonly uint _stream;
     private readonly HashSet<ulong> _members = new();
@@ -72,6 +76,10 @@ internal sealed partial class VoiceSession : IDisposable
     private readonly short[] _decoded = new short[VoiceFormat.MaxChunkSamples];
     private readonly short[] _frame = new short[VoiceFormat.FrameSamples];
     private int _frameCount;
+    private VoiceEncoder? _encoder;
+    private short[]? _previousFrame;
+    private bool _hasPreviousFrame;
+    private bool _wantMic;
     private byte[]? _previousChunk;
     private int _previousSamples;
     private long _heardAt;
@@ -93,20 +101,39 @@ internal sealed partial class VoiceSession : IDisposable
     private VoiceStatus? _statusSent;
     private long _statusSentAt;
 
-    public VoiceSession(ulong local, IVoiceDevice? device, IVoiceDecoder decoder, IVoiceOutput output, VoiceMutes mutes,
-        Func<ulong, bool> isFriend, Action<string>? log, uint? stream = null)
+    public VoiceSession(ulong local, IVoiceDevice? device, IVoiceDecoder? decoder, IVoiceOutput output, VoiceMutes mutes,
+        Func<ulong, bool> isFriend, Action<string>? log, uint? stream = null, Func<ulong, bool>? isBlocked = null)
     {
         _local = local;
         _device = device;
-        _decoder = decoder;
+        _steamDecoder = decoder;
         _output = output;
         _mutes = mutes;
         _isFriend = isFriend;
+        _isBlocked = isBlocked;
         _log = log;
         _stream = stream ?? BitConverter.ToUInt32(RandomNumberGenerator.GetBytes(4));
     }
 
     public IVoiceLink? Link { get; set; }
+
+    public void SwitchLink(IVoiceLink link)
+    {
+        // Pending chunks belong to the old codec. Never flush them into the new room.
+        _outgoing.Clear();
+        StopCapture();
+        if (_outputActive)
+        {
+            _output.Stop();
+            _outputActive = false;
+        }
+        foreach (Peer peer in _peers.Values)
+        {
+            peer.Buffer.Clear();
+        }
+        _statusSent = null;
+        Link = link;
+    }
 
     // Off: nothing is recorded, sent or played, whatever the mic does.
     public bool Enabled { get; set; } = true;
@@ -127,7 +154,7 @@ internal sealed partial class VoiceSession : IDisposable
 
     public double MicLevel => _capturing && _now - _heardAt < MicQuietMs ? _gate.Meter : 0;
 
-    public bool CanCapture => _device?.CaptureState == VoiceCaptureState.Ready;
+    public bool CanCapture => _device?.CaptureState is VoiceCaptureState.Ready or VoiceCaptureState.NeedsPermission or VoiceCaptureState.Asking;
 
     public LocalVoiceState LocalState
     {
@@ -148,6 +175,10 @@ internal sealed partial class VoiceSession : IDisposable
             if (_sending)
             {
                 return LocalVoiceState.Speaking;
+            }
+            if (_wantMic)
+            {
+                return LocalVoiceState.Asking;
             }
             return MicOn ? LocalVoiceState.Live : LocalVoiceState.Muted;
         }
@@ -175,21 +206,30 @@ internal sealed partial class VoiceSession : IDisposable
 
     public void SetMic(bool on)
     {
-        if (!on)
+        if (!on || !Enabled)
         {
             MicOn = false;
+            _wantMic = false;
         }
-        else if (CanCapture)
+        else if (_device?.CaptureState == VoiceCaptureState.Ready)
         {
             MicOn = true;
         }
+        else if (_device?.CaptureState is VoiceCaptureState.NeedsPermission or VoiceCaptureState.Asking)
+        {
+            _wantMic = true;
+            if (_device.CaptureState == VoiceCaptureState.NeedsPermission)
+            {
+                _device.RequestPermission();
+            }
+        }
     }
 
-    public void ToggleMic() => SetMic(!MicOn);
+    public void ToggleMic() => SetMic(!(MicOn || _wantMic));
 
     public bool IsSpeaking(ulong player) => _peers.TryGetValue(player, out Peer? peer) && _now < peer.SpeakingUntil;
 
-    public bool IsMuted(ulong player) => _mutes.IsMuted(player, _isFriend(player));
+    public bool IsMuted(ulong player) => _isBlocked?.Invoke(player) == true || _mutes.IsMuted(player, _isFriend(player));
 
     public bool IsTooLoud(ulong player) => _peers.TryGetValue(player, out Peer? peer) && peer.Limiter.TooLoud;
 
@@ -264,7 +304,7 @@ internal sealed partial class VoiceSession : IDisposable
         peer.Received++;
         // The ring shows who is talking even when they are muted, so the listener knows whom they muted.
         peer.SpeakingUntil = packet.EndsTalk ? _now + SpeakingHoldMs / 3 : _now + SpeakingHoldMs;
-        if (!Enabled || !Hearing || IsMuted(sender))
+        if (!Enabled || !Hearing || IsMuted(sender) || packet.IsOpus != (Link?.UsesOpus == true))
         {
             peer.Dropped++;
             return;
@@ -273,9 +313,23 @@ internal sealed partial class VoiceSession : IDisposable
         {
             return;
         }
+        IVoiceDecoder? decoder = _steamDecoder;
+        if (packet.IsOpus)
+        {
+            peer.Opus ??= new VoiceDecoder();
+            if (packet.StartsTalk)
+            {
+                peer.Opus.Reset();
+            }
+            decoder = peer.Opus;
+        }
+        if (decoder == null)
+        {
+            return;
+        }
         for (int i = 0; i < packet.Chunks.Count; i++)
         {
-            int samples = _decoder.Decompress(packet.Chunks[i], _decoded);
+            int samples = decoder.Decompress(packet.Chunks[i], _decoded);
             peer.Decoded += samples;
             peer.Buffer.Add(_decoded.AsSpan(0, samples), packet.EndsTalk && i == packet.Chunks.Count - 1);
         }
@@ -284,6 +338,11 @@ internal sealed partial class VoiceSession : IDisposable
     public void Update(long now)
     {
         _now = now;
+        if (_wantMic && (!Enabled || _device?.CaptureState is VoiceCaptureState.Ready or VoiceCaptureState.Denied or VoiceCaptureState.Unsupported))
+        {
+            MicOn = Enabled && _device?.CaptureState == VoiceCaptureState.Ready;
+            _wantMic = false;
+        }
         UpdateCapture();
         UpdatePlayback();
         UpdateStatus();

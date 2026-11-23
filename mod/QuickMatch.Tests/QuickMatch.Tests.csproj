@@ -21,24 +21,36 @@
     <Compile Include="../QuickMatchLoader/BuildChoice.cs" Link="Loader/BuildChoice.cs" />
     <Compile Include="../QuickMatch/Ui/LookLayout.cs" Link="Ui/LookLayout.cs" />
     <Compile Include="../QuickMatch/Matchmaking/BlockList.cs" Link="BlockList.cs" />
+    <Compile Include="../QuickMatch/Matchmaking/RecentPlayers.cs" Link="RecentPlayers.cs" />
     <Compile Include="../QuickMatch/Matchmaking/KickVote.cs" Link="KickVote.cs" />
     <Compile Include="../QuickMatch/Matchmaking/RunKickPolicy.cs" Link="RunKickPolicy.cs" />
     <Compile Include="../QuickMatch/Matchmaking/KickVoteWire.cs" Link="KickVoteWire.cs" />
     <Compile Include="../QuickMatch/Matchmaking/StartShortWire.cs" Link="StartShortWire.cs" />
+    <Compile Include="../QuickMatch/Emotes/EmoteWire.cs;../QuickMatch/Emotes/EmoteLimiter.cs;../QuickMatch/Emotes/EmoteGate.cs;../QuickMatch/Emotes/EmoteChoices.cs" LinkBase="Emotes" />
     <Compile Include="../QuickMatch/Matchmaking/JoinLeaveRecord.cs" Link="JoinLeaveRecord.cs" />
     <Compile Include="../QuickMatch/Matchmaking/DropPolicy.cs" Link="DropPolicy.cs" />
     <Compile Include="../QuickMatch/Matchmaking/RejoinPolicy.cs" Link="RejoinPolicy.cs" />
     <Compile Include="../QuickMatch/Matchmaking/MigrationPolicy.cs" Link="MigrationPolicy.cs" />
     <!-- The lobby keys, the voice choice they carry, and what a lobby's host takes. -->
     <Compile Include="../QuickMatch/Steam/LobbyKeys.cs" Link="Transport/LobbyKeys.cs" />
+    <Compile Include="../QuickMatch/Steam/ResumeLobby.cs" Link="Transport/ResumeLobby.cs" />
     <Compile Include="../QuickMatch/Voice/MatchVoice.cs" Link="Voice/MatchVoice.cs" />
     <Compile Include="../QuickMatch/Matchmaking/MatchMode.cs" Link="MatchMode.cs" />
     <Compile Include="../QuickMatch/Transport/LobbyLinks.cs" Link="Transport/LobbyLinks.cs" />
     <Compile Include="../QuickMatch/Matchmaking/LinkPolicy.cs" Link="LinkPolicy.cs" />
+    <!-- The lobby chat transport and a desktop host's routing; tests run them against a simulated Steam. -->
+    <Compile Include="../QuickMatch/Lobby/ILobbyBackend.cs;../QuickMatch/Transport/ChatFraming.cs;../QuickMatch/Transport/ChatLink.cs;../QuickMatch/Transport/ChatReasons.cs;../QuickMatch/Transport/ChatHostCore.cs;../QuickMatch/Transport/ChatClientCore.cs;../QuickMatch/Transport/MixedRoutes.cs" LinkBase="Transport" />
+    <Compile Include="../QuickMatch/Transport/IRelayTransport.cs;../QuickMatch/Transport/RelayCrypto.cs;../QuickMatch/Transport/RelaySession.cs;../QuickMatch/Transport/RelayRoute*.cs;../QuickMatch/Voice/VoiceCrypto.cs" LinkBase="Transport" />
+    <Compile Include="../QuickMatch/Platforms/Relay/RelaySettings.cs" Link="Relay/RelaySettings.cs" />
+    <Compile Include="../QuickMatch/Platforms/Desktop/SocketVoiceWire.cs" Link="Voice/SocketVoiceWire.cs" />
+    <Compile Include="../QuickMatch.SteamKit/*.cs" LinkBase="SteamKit" />
+    <Compile Include="../QuickMatch/Platforms/Android/AndroidLobbyBackend.cs" Link="Platforms/Android/AndroidLobbyBackend.cs" />
     <!-- Which features a game update turned off; plain C#, GamePatches only feeds it Harmony. -->
     <Compile Include="../QuickMatch/Patches/GameFeature.cs;../QuickMatch/Patches/FeaturePlan.cs" LinkBase="Patches" />
+    <Compile Include="../QuickMatch/ThirdParty/Concentus/**/*.cs" LinkBase="ThirdParty/Concentus" />
+    <Compile Include="../QuickMatch/Voice/VoiceCodec.cs" Link="Voice/VoiceCodec.cs" />
     <!-- Voice chat's core (packets, gate, jitter buffer, limiter, mutes, session, Steam wire); plain C#. -->
-    <Compile Include="../QuickMatch/Voice/VoiceFormat.cs;../QuickMatch/Voice/VoicePacket.cs;../QuickMatch/Voice/VoiceGate.cs;../QuickMatch/Voice/JitterBuffer.cs;../QuickMatch/Voice/VoiceLimiter.cs;../QuickMatch/Voice/VoiceMutes.cs;../QuickMatch/Voice/IVoiceDevice.cs;../QuickMatch/Voice/VoiceSession.cs;../QuickMatch/Voice/VoiceSession.Capture.cs;../QuickMatch/Voice/VoiceSession.Playback.cs;../QuickMatch/Voice/SteamVoiceWire.cs" LinkBase="Voice" />
+    <Compile Include="../QuickMatch/Voice/VoiceFormat.cs;../QuickMatch/Voice/VoicePacket.cs;../QuickMatch/Voice/VoiceGate.cs;../QuickMatch/Voice/JitterBuffer.cs;../QuickMatch/Voice/VoiceLimiter.cs;../QuickMatch/Voice/VoiceMutes.cs;../QuickMatch/Voice/IVoiceDevice.cs;../QuickMatch/Voice/VoiceSession.cs;../QuickMatch/Voice/VoiceSession.Capture.cs;../QuickMatch/Voice/VoiceSession.Playback.cs;../QuickMatch/Voice/SteamVoiceWire.cs;../QuickMatch/Voice/VoiceRoster.cs" LinkBase="Voice" />
   </ItemGroup>
 
   <ItemGroup>
@@ -67,5 +79,6 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
     <PackageReference Include="System.Reflection.MetadataLoadContext" Version="9.0.7" />
     <PackageReference Include="Mono.Cecil" Version="0.11.6" />
+    <PackageReference Include="SteamKit2" Version="3.4.0" />
   </ItemGroup>
 </Project>

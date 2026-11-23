@@ -26,6 +26,8 @@ internal enum GameFeature
     // Voice chat: the mic buttons, the speaking rings and the voice transport. Off means no voice choice at all,
     // so the player is only matched into lobbies without voice.
     Voice,
+    // Emotes: the emote button on the player's own row and the status bubbles over each player.
+    Emotes,
     // Quick matches in Blitz, through its own lobby screen.
     Blitz,
     // Quick matches in Dread, through its own lobby screen.

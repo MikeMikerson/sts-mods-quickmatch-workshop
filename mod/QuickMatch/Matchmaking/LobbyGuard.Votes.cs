@@ -1,5 +1,6 @@
 using System.Linq;
 using MegaCrit.Sts2.Core.Runs;
+using QuickMatch.Emotes;
 using QuickMatch.Lobby;
 using QuickMatch.Ui;
 
@@ -64,7 +65,7 @@ internal static partial class LobbyGuard
     private static void OnLobbyEvent(LobbyEvent e)
     {
         // Any thread: only queue it.
-        if (e.Kind == LobbyEventKind.Chat && e.Lobby == _lobby && e.Data is { Length: KickVoteWire.Length or StartShortWire.Length } data)
+        if (e.Kind == LobbyEventKind.Chat && e.Lobby == _lobby && e.Data is { Length: KickVoteWire.Length or StartShortWire.Length or EmoteWire.Length } data)
         {
             Inbox.Enqueue((e.Member, data));
         }
@@ -82,6 +83,11 @@ internal static partial class LobbyGuard
             // Our own messages come back from Steam; we counted them when we sent them.
             if (message.Sender == self)
             {
+                continue;
+            }
+            if (_inRun && EmoteWire.TryRead(message.Data, out Emote emote))
+            {
+                EmoteRoom.Receive(message.Sender, emote);
                 continue;
             }
             if (!_inRun && StartShortWire.TryRead(message.Data, out StartShortMessage question, out int players, out byte round))
@@ -195,9 +201,24 @@ internal static partial class LobbyGuard
     private static void Send(ulong target, VoteMessage kind)
     {
         byte[] message = KickVoteWire.Write(target, kind);
-        if (!LobbyBackend.Current.SendChat(_lobby, message, message.Length))
+        if (!LobbyBackend.Current.SendChat(_lobby, message, message.Length, 0))
         {
             MainFile.Logger.Warn($"{Where()}: could not send a vote");
         }
+    }
+
+    public static bool SendEmote(Emote emote)
+    {
+        if (!Active || !_inRun)
+        {
+            return false;
+        }
+        byte[] message = EmoteWire.Write(emote);
+        if (LobbyBackend.Current.SendChat(_lobby, message, message.Length, 0))
+        {
+            return true;
+        }
+        MainFile.Logger.Warn($"{Where()}: could not send an emote");
+        return false;
     }
 }

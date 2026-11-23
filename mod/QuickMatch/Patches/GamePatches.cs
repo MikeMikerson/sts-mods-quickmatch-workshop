@@ -5,17 +5,17 @@ using System.Reflection;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Runs;
 using QuickMatch.Matchmaking;
+using QuickMatch.Platforms.Android;
 using QuickMatch.Platforms.Desktop;
+using QuickMatch.Platforms.Relay;
 
 namespace QuickMatch.Patches;
 
-// Applies the mod's patches one feature at a time (FeaturePlan), each under its own Harmony id so it can be undone
-// alone. A feature that reaches private game members by name has them checked first, so a renamed one turns the
+// Applies the mod's patches at run time, one feature at a time (FeaturePlan), each under its own Harmony id so it can
+// be undone alone. A feature that reaches private game members by name has them checked first, so a renamed one turns the
 // feature off at start instead of failing in the middle of a run.
 internal static class GamePatches
 {
-    private static readonly HashSet<GameFeature> Off = [];
-
     private static readonly Dictionary<GameFeature, (string Type, string Member)[]> CalledByName = new()
     {
         [GameFeature.StandIn] = DropPolicy.GameMembers,
@@ -24,11 +24,10 @@ internal static class GamePatches
 
     private const BindingFlags AllMembers = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
 
-    public static bool IsOn(GameFeature feature) => !Off.Contains(feature);
-
     // False when the mod is off.
     public static bool Apply()
     {
+        bool android = AndroidPlatform.InLauncher();
         ILookup<GameFeature, Type> classes = AccessTools.GetTypesFromAssembly(Assembly.GetExecutingAssembly())
             .Where(type => type.IsDefined(typeof(HarmonyPatch), false))
             .ToLookup(FeatureOf);
@@ -36,20 +35,36 @@ internal static class GamePatches
         FeaturePlan.Outcome outcome = FeaturePlan.Apply(
             feature =>
             {
+                if (android && feature == GameFeature.LinkJoin)
+                {
+                    return;
+                }
                 CheckCalledByName(feature);
                 var harmony = new Harmony(Id(feature));
                 foreach (Type type in classes[feature])
                 {
                     harmony.CreateClassProcessor(type).Patch();
                 }
-                if (feature == GameFeature.Voice)
+                if (!android && feature == GameFeature.Voice)
                 {
                     DesktopPlatform.Install(harmony);
                 }
             },
             feature => new Harmony(Id(feature)).UnpatchAll(Id(feature)),
             MainFile.Logger.Warn);
-        Off.UnionWith(outcome.Off);
+        Features.TurnOff(outcome.Off);
+        if (android)
+        {
+            Features.TurnOff([GameFeature.LinkJoin]);
+        }
+        if (outcome.ModOn)
+        {
+            if (android)
+            {
+                AndroidPlatform.Install();
+            }
+            RelaySetup.Install();
+        }
         return outcome.ModOn;
     }
 

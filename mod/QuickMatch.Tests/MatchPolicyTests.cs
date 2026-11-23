@@ -20,6 +20,20 @@ public class MatchPolicyTests
         Assert.Equal([newPair, oldSolo, sameAgeSoloHigherId, newSolo], ranked);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void EligibleDesktopHostRanksFirst(bool randomSize)
+    {
+        var desktopWrongAscension = new LobbyCandidate(1, 3, 100, Ascension: 1, Size: 4);
+        var phone = new LobbyCandidate(2, 3, 101, Size: 4, HostOffersSockets: false);
+        var desktop = new LobbyCandidate(3, 1, 102, Size: 4);
+
+        var ranked = MatchPolicy.Rank([desktopWrongAscension, phone, desktop], 0, SkipNone, ascensions: [0], randomSize);
+
+        Assert.Equal([desktop, phone], ranked);
+    }
+
     [Fact]
     public void Rank_DropsOwnLobbySkippedIncompleteAndDuplicates()
     {

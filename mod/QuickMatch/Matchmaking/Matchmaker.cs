@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Godot;
@@ -12,6 +13,7 @@ using MegaCrit.Sts2.Core.Nodes.Screens.MainMenu;
 using MegaCrit.Sts2.Core.Saves;
 using QuickMatch.Lobby;
 using QuickMatch.Steam;
+using QuickMatch.Transport;
 using QuickMatch.Ui;
 using QuickMatch.Voice;
 
@@ -54,6 +56,7 @@ internal static partial class Matchmaker
     private static uint _createdAt;
     private static INetGameService? _handlerService;
     private static bool _handlersAsHost;
+    private static ulong[]? _desktopPlayers;
 
     private static readonly HashSet<ulong> RefusedHere = new();
     private static readonly HashSet<ulong> AskedHost = new();
@@ -68,7 +71,7 @@ internal static partial class Matchmaker
     private static int _idleStreak;
     private static int _idleNotice;
 
-    public static (int Size, bool Voice, ulong HostId, ulong At)? PendingRunStart { get; set; }
+    public static (int Size, bool Voice, ulong HostId, ulong At, ulong[]? DesktopPlayers)? PendingRunStart { get; set; }
     public static MatchState State { get; private set; }
     public static int Size { get; private set; }
     public static bool RandomSize { get; private set; }
@@ -165,7 +168,7 @@ internal static partial class Matchmaker
             ? Lobby.NetService.NetId
             : LobbyBackend.Current.Owner(SteamLobbyId);
         // The run's own size: an Any lobby may start below its 4.
-        PendingRunStart = (Lobby.Players.Count, MatchVoice.On, hostId, Time.GetTicksMsec());
+        PendingRunStart = (Lobby.Players.Count, MatchVoice.On, hostId, Time.GetTicksMsec(), _desktopPlayers);
         LobbyStatusPanel.Hide(screen);
         Reset("run started");
     }
@@ -190,6 +193,25 @@ internal static partial class Matchmaker
     public static bool BlocksStart(StartRunLobby lobby)
     {
         return Lobby != null && lobby == Lobby && !AnySize && lobby.Players.Count < StartSize;
+    }
+
+    public static void ShareDesktopRoster(StartRunLobby lobby)
+    {
+        if (lobby != Lobby || lobby.NetService is not QuickMatchHostService host || !lobby.IsAboutToBeginGame())
+        {
+            return;
+        }
+        _desktopPlayers = lobby.Players.Where(p => p.id == host.NetId ? QuickMatchHostService.HasSockets : host.PeerOffersSockets(p.id))
+            .Select(p => p.id).ToArray();
+        host.SendMessage(new QuickMatchDesktopRosterMessage { players = _desktopPlayers });
+    }
+
+    private static void OnDesktopRoster(QuickMatchDesktopRosterMessage message, ulong sender)
+    {
+        if (sender != 0 && sender == LobbyBackend.Current.Owner(SteamLobbyId))
+        {
+            _desktopPlayers = message.players;
+        }
     }
 
     public static double? CountdownLeft
@@ -271,6 +293,7 @@ internal static partial class Matchmaker
         {
             _handlerService.RegisterMessageHandler<QuickMatchMoveMessage>(OnMoveMessage);
             _handlerService.RegisterMessageHandler<QuickMatchLeaveMessage>(OnLeaveMessage);
+            _handlerService.RegisterMessageHandler<QuickMatchDesktopRosterMessage>(OnDesktopRoster);
         }
         BlockStore.List.Changed += CheckBlocked;
         LobbyBackend.Current.Changed += OnLobbyChanged;
@@ -303,6 +326,7 @@ internal static partial class Matchmaker
                 {
                     _handlerService.UnregisterMessageHandler<QuickMatchMoveMessage>(OnMoveMessage);
                     _handlerService.UnregisterMessageHandler<QuickMatchLeaveMessage>(OnLeaveMessage);
+                    _handlerService.UnregisterMessageHandler<QuickMatchDesktopRosterMessage>(OnDesktopRoster);
                 }
             }
             catch (Exception e)
@@ -314,6 +338,7 @@ internal static partial class Matchmaker
         RefusedHere.Clear();
         AskedHost.Clear();
         _deadline = 0;
+        _desktopPlayers = null;
         ResetStartShort();
         if (_screen != null && GodotObject.IsInstanceValid(_screen))
         {

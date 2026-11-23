@@ -5,7 +5,9 @@ using Godot;
 using MegaCrit.Sts2.Core.Multiplayer;
 using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.Runs;
+using QuickMatch.Emotes;
 using QuickMatch.Lobby;
+using QuickMatch.Transport;
 using QuickMatch.Ui;
 
 namespace QuickMatch.Matchmaking;
@@ -17,7 +19,8 @@ internal readonly record struct VoteView(ulong Target, int Yes, int Needed, doub
 // client (KickVote, over lobby chat so Steam vouches for each voter), and the host's join-and-leave record
 // (JoinLeaveRecord, kept by SeenStore). In a quick-match run the same vote runs over the run's Steam lobby chat among
 // the present players, the host can be voted out, and a passed vote bans the player from the run (RunKickPolicy).
-// The same queue hands the Matchmaker its question whether to start short (StartShortWire).
+// The same queue hands the Matchmaker its question whether to start short (StartShortWire), and in a run hands
+// EmoteRoom the players' emotes (EmoteWire).
 // Runs on the game's thread; lobby events may arrive on any thread and wait in a queue for the next frame.
 internal static partial class LobbyGuard
 {
@@ -52,7 +55,7 @@ internal static partial class LobbyGuard
     public static void BeginRun(INetGameService netService)
     {
         EndRun();
-        if (!ulong.TryParse(netService.GetRawLobbyIdentifier(), out ulong lobby) || lobby == 0)
+        if (LobbyLinks.ParseLobbyId(netService.GetRawLobbyIdentifier()) is not { } lobby)
         {
             MainFile.Logger.Info("run: no Steam lobby, so no vote to remove a player");
             return;
@@ -83,6 +86,10 @@ internal static partial class LobbyGuard
         _lobby = steamLobbyId;
         _inRun = inRun;
         Vote.HostCanBeRemoved = inRun;
+        if (inRun)
+        {
+            EmoteRoom.NewRun();
+        }
         _epoch++;
         LobbyBackend.Current.Changed += OnLobbyEvent;
         if (Engine.GetMainLoop() is SceneTree tree)

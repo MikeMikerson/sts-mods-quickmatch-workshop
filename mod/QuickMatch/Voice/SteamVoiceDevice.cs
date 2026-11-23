@@ -4,8 +4,7 @@ using Steamworks;
 
 namespace QuickMatch.Voice;
 
-// Steam's voice API uses the microphone chosen in Steam's own voice settings, Steam's noise handling and Steam's own
-// codec; its compressed voice is sent to the others as it is.
+// Steam records with the microphone and noise handling chosen in its voice settings.
 internal sealed class SteamVoiceDevice : IVoiceDevice
 {
     private readonly byte[] _compressed = new byte[8 * 1024];

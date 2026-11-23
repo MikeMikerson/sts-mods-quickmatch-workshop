@@ -136,7 +136,8 @@ internal static partial class Matchmaker
                 await LeaveLostLobbyAsync($"not visible in {OwnLobbyWatch.MissesToGiveUp} searches in a row", ct);
                 return;
             }
-            var own = new LobbyCandidate(SteamLobbyId, group, _createdAt, Ascension: HostedAscension, Size: Size, AnySize: AnySize);
+            var own = new LobbyCandidate(SteamLobbyId, group, _createdAt, Ascension: HostedAscension, Size: Size, AnySize: AnySize,
+                HostOffersSockets: QuickMatchHostService.HasSockets);
             LobbyCandidate? target = MatchPolicy.PickMergeTarget(own, found, IsRecentlyFailed, Size);
             if (target == null)
             {
@@ -158,7 +159,13 @@ internal static partial class Matchmaker
             if (group > 1 && Lobby?.NetService is NetHostGameService host)
             {
                 LobbyGuard.NoteMovingEveryone();
-                host.SendMessage(new QuickMatchMoveMessage { targetLobbyId = targetId, size = target.Value.Size, anySize = target.Value.AnySize });
+                host.SendMessage(new QuickMatchMoveMessage
+                {
+                    targetLobbyId = targetId,
+                    size = target.Value.Size,
+                    anySize = target.Value.AnySize,
+                    hostOffersSockets = target.Value.HostOffersSockets,
+                });
                 await WaitForClientsToLeaveAsync(host, ct);
             }
             await LeaveForAsync(targetId, target.Value.Size, target.Value.AnySize, ct);
@@ -189,11 +196,6 @@ internal static partial class Matchmaker
         finally
         {
             _merging = false;
-        }
-        if (!LobbyLinks.IsListed(targetId))
-        {
-            // A moving client only has the lobby's ID from its host, and Steam voice runs only in a listed lobby.
-            await LobbySearch.FindAsync(anySize ? 0 : size, ct);
         }
         if (await TryJoinAsync(targetId, size, anySize, ct))
         {
@@ -245,6 +247,7 @@ internal static partial class Matchmaker
             return;
         }
         int size = message.size is >= 2 and <= 4 ? message.size : Size;
+        LobbyLinks.Remember(message.targetLobbyId, message.hostOffersSockets);
         MainFile.Logger.Info($"merge: host {senderId} moves the group to lobby {message.targetLobbyId} ({size}{(message.anySize ? " any size" : "")})");
         SetState(MatchState.Merging, $"to {message.targetLobbyId}");
         CancellationToken ct = _cts.Token;

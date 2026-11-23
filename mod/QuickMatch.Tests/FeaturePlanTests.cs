@@ -57,7 +57,7 @@ public class FeaturePlanTests
         FeaturePlan.Outcome outcome = run.Apply(GameFeature.RunTracking);
 
         Assert.True(outcome.ModOn);
-        Assert.Equal(new HashSet<GameFeature> { GameFeature.RunTracking, GameFeature.Regroup, GameFeature.StandIn, GameFeature.Rejoin }, outcome.Off);
+        Assert.Equal(new HashSet<GameFeature> { GameFeature.RunTracking, GameFeature.Regroup, GameFeature.StandIn, GameFeature.Rejoin, GameFeature.Emotes }, outcome.Off);
         Assert.DoesNotContain(GameFeature.Regroup, run.Applied);
         Assert.DoesNotContain(GameFeature.Rejoin, run.Applied);
         Assert.Contains(run.Log, line => line == "Rejoin is off: it needs Regroup, StandIn");
@@ -70,6 +70,15 @@ public class FeaturePlanTests
         FeaturePlan.Outcome outcome = new Run().Apply(GameFeature.PlayerWindow);
 
         Assert.Contains(GameFeature.Voice, outcome.Off);
+    }
+
+    // Hide Emotes is in the player window, so emotes without it would leave a player unable to hide anyone's.
+    [Fact]
+    public void EmotesAreOffWhenThePlayerWindowIsOff()
+    {
+        FeaturePlan.Outcome outcome = new Run().Apply(GameFeature.PlayerWindow);
+
+        Assert.Contains(GameFeature.Emotes, outcome.Off);
     }
 
     [Fact]

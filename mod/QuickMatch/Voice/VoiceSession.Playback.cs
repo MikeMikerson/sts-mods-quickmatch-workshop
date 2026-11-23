@@ -25,6 +25,10 @@ internal sealed partial class VoiceSession
             bool any = false;
             foreach ((ulong id, Peer peer) in _peers)
             {
+                if (peer.Buffer.BufferedSamples > 0 && _isBlocked?.Invoke(id) == true)
+                {
+                    peer.Buffer.Clear();
+                }
                 if (!peer.Buffer.Take(_pcm))
                 {
                     continue;

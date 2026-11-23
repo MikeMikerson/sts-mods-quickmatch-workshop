@@ -21,6 +21,8 @@ internal static class FeaturePlan
         (GameFeature.PlayerWindow, []),
         // Muting is in the player window.
         (GameFeature.Voice, [GameFeature.PlayerWindow]),
+        // Hide Emotes is in the player window; the button shows only in a tracked quick-match run.
+        (GameFeature.Emotes, [GameFeature.RunTracking, GameFeature.PlayerWindow]),
         (GameFeature.Blitz, []),
         (GameFeature.Dread, []),
     ];

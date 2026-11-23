@@ -50,7 +50,11 @@ public class LoadAnywhereTests
         using AssemblyDefinition mod = AssemblyDefinition.ReadAssembly(ModDll);
         Assert.Equal(Path.GetFileNameWithoutExtension(ModDll), mod.Name.Name);
         Assert.StartsWith(QuickMatchLoader.BuildChoice.Prefix, mod.Name.Name);
-        Assert.Equal("QuickMatch", mod.MainModule.GetType("QuickMatch.MainFile").Fields.Single(f => f.Name == "ModId").Constant as string);
+        TypeDefinition mainFile = mod.MainModule.GetType("QuickMatch.MainFile");
+        Assert.Equal("QuickMatch", mainFile.Fields.Single(f => f.Name == "ModId").Constant as string);
+        // A build loaded by the game itself, without the loader, starts through this attribute.
+        CustomAttribute initializer = mainFile.CustomAttributes.Single(a => a.AttributeType.Name == "ModInitializerAttribute");
+        Assert.Contains(mainFile.Methods, m => m.Name == (string)initializer.ConstructorArguments[0].Value && m.IsStatic && !m.HasParameters);
     }
 
     private static Type[] GetTypes(Assembly assembly)

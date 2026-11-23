@@ -8,6 +8,7 @@ using QuickMatch.Localization;
 using QuickMatch.Lobby;
 using QuickMatch.Matchmaking;
 using QuickMatch.Patches;
+using QuickMatch.Transport;
 using QuickMatch.Voice;
 
 namespace QuickMatch.Ui;
@@ -51,7 +52,7 @@ internal static class LobbyStatusPanel
         panel.Visible = show;
         if (screen.GetNodeOrNull<Button>(LinkButtonName) is { } link)
         {
-            link.Visible = show && GamePatches.IsOn(GameFeature.LinkJoin);
+            link.Visible = show && Features.IsOn(GameFeature.LinkJoin);
             bool copied = _copiedAt != 0 && Time.GetTicksMsec() - _copiedAt < CopiedMsec;
             GameLook.SetText(link, Loc.Get(copied ? "QUICKMATCH.LINK.copied" : "QUICKMATCH.LINK.copy"));
         }
@@ -160,6 +161,11 @@ internal static class LobbyStatusPanel
         clock.Timeout += () => Refresh(screen);
         panel.AddChild(clock);
         screen.AddChild(panel);
+
+        if (!QuickMatchHostService.HasSockets)
+        {
+            return panel;
+        }
 
         Button link = GameLook.Button(LinkButtonName, Loc.Get("QUICKMATCH.LINK.copy"), () => CopyLink(screen), LinkButtonWidth);
         link.AnchorLeft = 0.5f;

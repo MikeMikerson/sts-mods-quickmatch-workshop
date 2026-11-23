@@ -1,7 +1,7 @@
 #!/bin/sh
 # Builds Quick Match for every game version it supports and lays it out as the mod folder players install,
 # out/QuickMatch: the loader QuickMatch.dll, a build per game version (QuickMatch-<version>.dll), the manifest, the
-# LICENSE and the README. Each build compiles against its own game's files: the beta's (0.113), by default the
+# licenses and the README. Each build compiles against its own game's files: the beta's (0.113), by default the
 # installed game's, and the stable branch's (0.111), whose data folder STS2_STABLE_DATA names, e.g.
 # <stable install>/data_sts2_linuxbsd_x86_64 (Steam's console: download_depot 2868840 2868843). While the installed
 # game is on stable, STS2_BETA_DATA names a copy of the beta's data folder for the loader and the 0.113 build.
@@ -31,4 +31,5 @@ cp QuickMatchLoader/bin/Release/net9.0/QuickMatch.dll \
    QuickMatch/bin/0.113/Release/net9.0/QuickMatch-0.113.dll \
    QuickMatch/bin/0.111/Release/net9.0/QuickMatch-0.111.dll \
    QuickMatch/QuickMatch.json ../LICENSE ../README.md "$out/"
+cp QuickMatch/ThirdParty/Concentus/LICENSE "$out/LICENSE-Concentus"
 echo "$out"

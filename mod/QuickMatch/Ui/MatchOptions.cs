@@ -78,7 +78,7 @@ internal sealed class MatchOptions
             }
         }
 
-        bool voiceWorks = GamePatches.IsOn(GameFeature.Voice);
+        bool voiceWorks = Features.IsOn(GameFeature.Voice);
         NTickbox? voice = GameLook.Tickbox("QuickMatchVoice", MatchChoice.Voice, ChooseVoice);
         if (voice != null)
         {

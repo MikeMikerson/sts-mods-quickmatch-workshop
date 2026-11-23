@@ -16,6 +16,8 @@ public struct QuickMatchMoveMessage : INetMessage, IPacketSerializable
 
     public bool anySize;
 
+    public bool hostOffersSockets;
+
     public bool ShouldBroadcast => false;
 
     public NetTransferMode Mode => NetTransferMode.Reliable;
@@ -29,6 +31,7 @@ public struct QuickMatchMoveMessage : INetMessage, IPacketSerializable
         writer.WriteULong(targetLobbyId);
         writer.WriteInt(size, 8);
         writer.WriteBool(anySize);
+        writer.WriteBool(hostOffersSockets);
     }
 
     public void Deserialize(PacketReader reader)
@@ -36,5 +39,6 @@ public struct QuickMatchMoveMessage : INetMessage, IPacketSerializable
         targetLobbyId = reader.ReadULong();
         size = reader.ReadInt(8);
         anySize = reader.ReadBool();
+        hostOffersSockets = reader.ReadBool();
     }
 }

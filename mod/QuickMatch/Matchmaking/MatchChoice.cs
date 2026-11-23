@@ -58,7 +58,7 @@ internal static class MatchChoice
     public static int Size => Load().Size is 2 or 3 or 4 ? Load().Size : 0;
 
     // Off when this game version turned voice off, so the player is matched without voice.
-    public static bool Voice => Load().Voice && GamePatches.IsOn(GameFeature.Voice);
+    public static bool Voice => Load().Voice && Features.IsOn(GameFeature.Voice);
 
     public static void Remember(AscensionChoice choice)
     {

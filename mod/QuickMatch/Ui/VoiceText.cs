@@ -15,6 +15,7 @@ internal static class VoiceText
         return session.LocalState switch
         {
             LocalVoiceState.Off => Loc.Get("QUICKMATCH.VOICE.why_off"),
+            LocalVoiceState.Unavailable when VoiceChat.RelayVoiceDown => Loc.Get("QUICKMATCH.VOICE.relay_down"),
             LocalVoiceState.Unavailable => Loc.Get("QUICKMATCH.VOICE.why_unavailable"),
             LocalVoiceState.ListenOnly => Loc.Get("QUICKMATCH.VOICE.why_listen_only"),
             _ => null,

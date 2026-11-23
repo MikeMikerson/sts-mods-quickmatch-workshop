@@ -1,32 +1,39 @@
 using System.Collections.Generic;
-using QuickMatch.Steam;
+using System.Globalization;
 
 namespace QuickMatch.Transport;
 
-// A quick-match host takes the game's own Steam sockets, as vanilla co-op does, and nothing else, and marks its lobby
-// with Filters; searches list only lobbies so marked and joiners always use the sockets.
-//
-// The lobbies searches listed are remembered, which tells a quick-match lobby from any other Steam game (a run with
-// friends). Main thread only, like the rest of matchmaking.
+// Remember the routes advertised by Quick Match lobbies. Steam voice also uses this to recognize a Quick Match lobby.
 internal static class LobbyLinks
 {
     private const int MaxRemembered = 256;
 
-    private static readonly HashSet<ulong> _listed = new();
+    private static readonly Dictionary<ulong, bool> _sockets = new();
+    private static readonly Queue<ulong> _order = new();
 
-    public static void Remember(ulong lobby)
+    public static void Remember(ulong lobby, bool offersSockets)
     {
-        if (_listed.Count >= MaxRemembered && !_listed.Contains(lobby))
+        if (!_sockets.ContainsKey(lobby))
         {
-            _listed.Clear();
+            if (_order.Count == MaxRemembered)
+            {
+                _sockets.Remove(_order.Dequeue());
+            }
+            _order.Enqueue(lobby);
         }
-        _listed.Add(lobby);
+        _sockets[lobby] = offersSockets;
     }
 
-    public static bool IsListed(ulong lobby) => _listed.Contains(lobby);
+    public static bool IsListed(ulong lobby) => _sockets.ContainsKey(lobby);
 
-    public static IReadOnlyDictionary<string, string> Filters { get; } =
-        new Dictionary<string, string> { [LobbyKeys.Pool] = LobbyKeys.PoolDesktop, [LobbyKeys.Link] = LobbyKeys.LinkSockets };
+    public static bool? OffersSockets(ulong lobby) => _sockets.TryGetValue(lobby, out bool sockets) ? sockets : null;
 
-    internal static void Forget() => _listed.Clear();
+    public static ulong? ParseLobbyId(string? raw) =>
+        ulong.TryParse(raw, NumberStyles.None, CultureInfo.InvariantCulture, out ulong lobby) && lobby != 0 ? lobby : null;
+
+    internal static void Forget()
+    {
+        _sockets.Clear();
+        _order.Clear();
+    }
 }

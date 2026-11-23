@@ -11,7 +11,8 @@ namespace QuickMatch.Matchmaking;
 // 0 if unknown. Ascension is qm_asc (0 to 10), -1 when missing or not a number. Size is qm_size (2 to 4; 4 for an Any
 // lobby), 0 when unknown. AnySize is an Any lobby (qm_size "any"): up to 4 players, starting with 2 or more once all
 // are ready.
-public readonly record struct LobbyCandidate(ulong Id, int Members, uint CreatedAt, int Ascension = 0, int Size = 0, bool AnySize = false)
+public readonly record struct LobbyCandidate(ulong Id, int Members, uint CreatedAt, int Ascension = 0, int Size = 0, bool AnySize = false,
+    bool HostOffersSockets = true)
 {
     public int FreeSlots => Size > 0 ? Math.Max(0, Size - Members) : 0;
 }
@@ -77,11 +78,16 @@ public enum IdleEvent
 // Pure matching rules, kept free of Godot and Steam types so they can be unit tested.
 public static class MatchPolicy
 {
-    // Total order over lobbies; better lobbies sort first: fuller groups, then older lobbies, then lower lobby ids.
+    // Desktop hosts sort first. Within each kind, fuller groups, then older lobbies, then lower lobby ids sort first.
     // Everyone uses the same order, so searchers pile into the same lobbies (groups fill quickly) and two hosts waiting
     // alone always agree on who yields.
     public static int Compare(LobbyCandidate a, LobbyCandidate b)
     {
+        int byHost = b.HostOffersSockets.CompareTo(a.HostOffersSockets);
+        if (byHost != 0)
+        {
+            return byHost;
+        }
         int byMembers = b.Members.CompareTo(a.Members);
         if (byMembers != 0)
         {
@@ -93,8 +99,7 @@ public static class MatchPolicy
 
     // Drops our own lobby, lobbies that failed recently, duplicates, and lobbies whose data has not fully arrived (no
     // creation time). Ascension is a filter, not a ranking key: a lobby with no valid ascension is never in ascensions.
-    // A randomSize search puts the lobbies with the fewest free slots first (the one nearest to full starts soonest),
-    // then the usual order.
+    // Within each host kind, a randomSize search prefers the fewest free slots before applying the usual order.
     public static List<LobbyCandidate> Rank(IEnumerable<LobbyCandidate> found, ulong ownLobbyId, Func<ulong, bool> skip,
         IReadOnlyCollection<int>? ascensions = null, bool randomSize = false)
     {
@@ -104,10 +109,12 @@ public static class MatchPolicy
             .Where(c => !randomSize || c.FreeSlots > 0)
             .GroupBy(c => c.Id)
             .Select(g => g.First());
-        IOrderedEnumerable<LobbyCandidate> ordered = randomSize
-            ? kept.OrderBy(c => c.FreeSlots).ThenBy(c => c, Comparer<LobbyCandidate>.Create(Compare))
-            : kept.OrderBy(c => c, Comparer<LobbyCandidate>.Create(Compare));
-        return ordered.ToList();
+        if (randomSize)
+        {
+            return kept.OrderByDescending(c => c.HostOffersSockets).ThenBy(c => c.FreeSlots)
+                .ThenBy(c => c, Comparer<LobbyCandidate>.Create(Compare)).ToList();
+        }
+        return kept.OrderBy(c => c, Comparer<LobbyCandidate>.Create(Compare)).ToList();
     }
 
     // The game's cap on multiplayer ascension.

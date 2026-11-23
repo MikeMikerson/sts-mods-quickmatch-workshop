@@ -25,7 +25,7 @@ internal static partial class Matchmaker
         SearchStartedByPlayer();
         MatchVoice.Set(lobby.Voice);
         // Its data marked it as a quick-match lobby, as a search listing would; Steam voice runs only in a listed lobby.
-        LobbyLinks.Remember(lobbyId);
+        LobbyLinks.Remember(lobbyId, lobby.HostOffersSockets);
         _cts = new CancellationTokenSource();
         int gen = ++_generation;
         CancellationToken ct = _cts.Token;

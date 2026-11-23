@@ -32,6 +32,39 @@ public class VoiceTests
 
     private static double Db(ReadOnlySpan<short> samples) => VoiceGate.Level(samples);
 
+    [Fact]
+    public void Opus_preserves_speech_level_across_frames()
+    {
+        var encoder = new VoiceEncoder();
+        var decoder = new VoiceDecoder();
+        var pcm = new short[N];
+        double totalDifference = 0;
+        for (int i = 0; i < 40; i++)
+        {
+            short[] input = Tone(i, -20);
+            byte[] frame = encoder.Encode(input);
+            Assert.InRange(frame.Length, 1, VoiceFormat.MaxFrameBytes);
+            Assert.Equal(N, decoder.Decompress(frame, pcm));
+            if (i >= 10)
+            {
+                totalDifference += Db(pcm) - Db(input);
+            }
+        }
+        Assert.InRange(totalDifference / 30, -3, 3);
+    }
+
+    [Fact]
+    public void Opus_drops_invalid_frames_and_decodes_the_next_frame()
+    {
+        var decoder = new VoiceDecoder();
+        var pcm = new short[N];
+        Assert.Equal(0, decoder.Decompress([], pcm));
+        Assert.Equal(0, decoder.Decompress([0xff, 0xff, 0xff, 0x00, 0x13], pcm));
+        Assert.Equal(0, decoder.Decompress(new byte[VoiceFormat.MaxFrameBytes + 1], pcm));
+        byte[] frame = new VoiceEncoder().Encode(Tone(0, -20));
+        Assert.Equal(N, decoder.Decompress(frame, pcm));
+    }
+
     // Chunk i of packet seq carries frame k = 3 seq + i, every sample of it Value(k), so the order can be read back.
     private static short Value(int frame) => (short)(1000 + 10 * (frame / 3) + frame % 3);
 
@@ -120,7 +153,39 @@ public class VoiceTests
         public void Tick() => Queued = Math.Max(0, Queued - N);
     }
 
-    // Delivers packets as Steam carries them (SteamVoiceWire), after a delay in ticks.
+    private sealed class PcmDevice : IPcmVoiceDevice
+    {
+        public readonly Queue<short[]> Reads = new();
+        public VoiceCaptureState CaptureState { get; set; } = VoiceCaptureState.NeedsPermission;
+        public int Requests;
+        public int Starts;
+
+        public void RequestPermission()
+        {
+            Requests++;
+            CaptureState = VoiceCaptureState.Asking;
+        }
+
+        public bool StartCapture()
+        {
+            Starts++;
+            return CaptureState == VoiceCaptureState.Ready;
+        }
+
+        public int ReadCapture(Span<short> destination)
+        {
+            if (!Reads.TryDequeue(out var samples))
+            {
+                return 0;
+            }
+            samples.CopyTo(destination);
+            return samples.Length;
+        }
+
+        public void StopCapture() => Reads.Clear();
+    }
+
+    // Each speaker has its own relay key.
     private sealed class FakeLink : IVoiceLink
     {
         private readonly ulong _from;
@@ -135,6 +200,8 @@ public class VoiceTests
         public FakeLink(ulong from) => _from = from;
 
         public bool IsUp { get; set; } = true;
+        public bool UsesOpus { get; set; }
+        private VoiceCrypto? _crypto;
 
         public void Send(VoicePacket packet)
         {
@@ -146,7 +213,11 @@ public class VoiceTests
             {
                 Sent++;
             }
-            _inFlight.Add((Tick + DelayTicks, SteamVoiceWire.Write(packet)));
+            if (UsesOpus)
+            {
+                _crypto ??= new VoiceCrypto(VoiceCrypto.NewKey());
+            }
+            _inFlight.Add((Tick + DelayTicks, _crypto?.Seal(packet) ?? SteamVoiceWire.Write(packet)));
         }
 
         public void Deliver()
@@ -154,7 +225,7 @@ public class VoiceTests
             foreach (var item in _inFlight.Where(p => p.Due <= Tick).ToList())
             {
                 _inFlight.Remove(item);
-                VoicePacket? packet = SteamVoiceWire.Read(item.Payload);
+                VoicePacket? packet = UsesOpus ? _crypto!.Open(item.Payload) : SteamVoiceWire.Read(item.Payload);
                 Assert.NotNull(packet);
                 foreach (VoiceSession session in To)
                 {
@@ -399,14 +470,14 @@ public class VoiceTests
         public readonly FakeCodec BobCodec = new();
         public readonly VoiceSession AliceVoice;
         public readonly VoiceSession BobVoice;
-        public readonly FakeLink AliceLink;
-        public readonly FakeLink BobLink;
+        public FakeLink AliceLink;
+        public FakeLink BobLink;
         public long Now;
 
-        public Match(FakeDevice? bobDevice = null, Action<string>? bobLog = null)
+        public Match(IVoiceDevice? bobDevice = null, Action<string>? bobLog = null, Func<ulong, bool>? blocked = null)
         {
             AliceVoice = new VoiceSession(Alice, AliceDevice, new FakeCodec(), AliceOutput, new VoiceMutes(), _ => false, null, stream: 5);
-            BobVoice = new VoiceSession(Bob, bobDevice, BobCodec, BobOutput, BobMutes, _ => false, bobLog, stream: 6);
+            BobVoice = new VoiceSession(Bob, bobDevice, BobCodec, BobOutput, BobMutes, _ => false, bobLog, stream: 6, isBlocked: blocked);
             AliceLink = new FakeLink(Alice) { DelayTicks = 2 };
             AliceLink.To.Add(BobVoice);
             AliceVoice.Link = AliceLink;
@@ -431,6 +502,175 @@ public class VoiceTests
                 Now += VoiceFormat.FrameMs;
             }
         }
+
+        public void SwitchToRelay()
+        {
+            AliceLink = new FakeLink(Alice) { UsesOpus = true };
+            AliceLink.To.Add(BobVoice);
+            AliceVoice.SwitchLink(AliceLink);
+            BobLink = new FakeLink(Bob) { UsesOpus = true };
+            BobLink.To.Add(AliceVoice);
+            BobVoice.SwitchLink(BobLink);
+        }
+    }
+
+    [Fact]
+    public void Switching_to_the_relay_keeps_the_mic_and_player_mute_choices()
+    {
+        var match = new Match();
+        match.AliceVoice.SetMic(true);
+        match.BobVoice.Mute(Alice);
+        match.Run(35, f => Tone(f, -25));
+        match.SwitchToRelay();
+        match.Run(30, f => Tone(f, -25));
+        Assert.True(match.AliceLink.Sent > 0);
+        Assert.True(match.BobVoice.IsMuted(Alice));
+        Assert.Empty(match.BobOutput.Played);
+        match.BobVoice.Unmute(Alice);
+        match.Run(30, f => Tone(f, -25));
+        Assert.True(Db(match.BobOutput.Played.ToArray()) > -40);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void An_inactive_mic_stays_silent_after_switching_to_the_relay(bool enabled)
+    {
+        var match = new Match();
+        match.AliceVoice.Enabled = enabled;
+        if (!enabled)
+        {
+            match.AliceVoice.ToggleMic();
+        }
+        match.SwitchToRelay();
+        match.BobVoice.SetMic(true);
+        match.Run(60, f => Tone(f, -20));
+        Assert.Equal(0, match.AliceDevice.Starts);
+        Assert.Equal(0, match.AliceLink.Sent);
+        Assert.Empty(match.BobOutput.Played);
+        if (!enabled)
+        {
+            Assert.Equal(0, match.AliceLink.StatusSent);
+            match.AliceVoice.Receive(Bob, new VoicePacket(1, 1, true, true, [new VoiceEncoder().Encode(Tone(0, -20))], true));
+            match.AliceVoice.Update(match.Now);
+            Assert.Empty(match.AliceOutput.Played);
+        }
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_muted_or_blocked_relay_sender_is_dropped_before_decoding(bool blocked)
+    {
+        var lines = new List<string>();
+        var match = new Match(bobLog: lines.Add, blocked: id => blocked && id == Alice);
+        if (!blocked)
+        {
+            match.BobVoice.Mute(Alice);
+        }
+        match.SwitchToRelay();
+        match.AliceVoice.SetMic(true);
+        match.Run(60, f => Tone(f, -25));
+        match.BobVoice.Dispose();
+        Assert.True(match.AliceLink.Sent > 0);
+        Assert.Contains(lines, line => line.Contains($"{match.AliceLink.Sent} muted, 0 late, 0 ms decoded"));
+        Assert.Empty(match.BobOutput.Played);
+    }
+
+    [Fact]
+    public void A_player_blocked_during_a_match_is_silent_from_then_on()
+    {
+        bool blocked = false;
+        var match = new Match(blocked: id => blocked && id == Alice);
+        match.AliceVoice.SetMic(true);
+        match.Run(60, f => Tone(f, -25));
+        Assert.True(Db(match.BobOutput.Played.ToArray()) > -40);
+
+        blocked = true;
+        match.BobOutput.Played.Clear();
+        match.Run(60, f => Tone(f, -25));
+        Assert.All(match.BobOutput.Played, sample => Assert.Equal(0, sample));
+    }
+
+    [Fact]
+    public void Granted_microphone_records_partial_and_multiple_Opus_frames()
+    {
+        var device = new PcmDevice();
+        var match = new Match(device);
+        match.AliceLink.UsesOpus = match.BobLink.UsesOpus = true;
+        match.BobVoice.ToggleMic();
+        match.BobVoice.Update(0);
+        Assert.Equal(LocalVoiceState.Asking, match.BobVoice.LocalState);
+        Assert.Equal(1, device.Requests);
+        Assert.Equal(0, device.Starts);
+
+        device.CaptureState = VoiceCaptureState.Ready;
+        short[] sound = Enumerable.Range(0, 6).SelectMany(i => Tone(i, -20)).ToArray();
+        device.Reads.Enqueue(sound[..(N / 2)]);
+        match.BobVoice.Update(10);
+        Assert.Equal(1, device.Starts);
+        Assert.Equal(0, match.BobLink.Sent);
+        device.Reads.Enqueue(sound[(N / 2)..(3 * N - 1)]);
+        match.BobVoice.Update(20);
+        Assert.Equal(0, match.BobLink.Sent);
+        device.Reads.Enqueue(sound[(3 * N - 1)..]);
+        match.BobVoice.Update(30);
+        Assert.Equal(2, match.BobLink.Sent);
+        match.BobLink.Deliver();
+        match.Run(10, _ => []);
+        Assert.True(Db(match.AliceOutput.Played.ToArray()) > -45);
+        Assert.Equal(0, match.BobCodec.Decoded);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Cancelling_or_denying_microphone_permission_prevents_capture(bool cancel)
+    {
+        var device = new PcmDevice();
+        var match = new Match(device);
+        match.BobLink.UsesOpus = true;
+        match.BobVoice.ToggleMic();
+        if (cancel)
+        {
+            match.BobVoice.ToggleMic();
+        }
+        device.CaptureState = cancel ? VoiceCaptureState.Ready : VoiceCaptureState.Denied;
+        match.BobVoice.Update(20);
+        Assert.Equal(cancel ? LocalVoiceState.Muted : LocalVoiceState.ListenOnly, match.BobVoice.LocalState);
+        Assert.False(match.BobVoice.MicOn);
+        Assert.Equal(0, device.Starts);
+        Assert.Equal(0, match.BobLink.Sent);
+    }
+
+    [Fact]
+    public void Disabled_voice_never_requests_or_starts_the_platform_microphone()
+    {
+        var device = new PcmDevice();
+        var match = new Match(device);
+        match.BobLink.UsesOpus = true;
+        match.BobVoice.Enabled = false;
+        match.BobVoice.ToggleMic();
+        match.BobVoice.Update(0);
+        device.CaptureState = VoiceCaptureState.Ready;
+        match.BobVoice.ToggleMic();
+        match.BobVoice.Update(20);
+        Assert.Equal(0, device.Requests);
+        Assert.Equal(0, device.Starts);
+        Assert.Equal(0, match.BobLink.Sent);
+    }
+
+    [Fact]
+    public void Desktop_capture_is_encoded_as_Opus_and_played_by_a_listen_only_peer()
+    {
+        var match = new Match();
+        match.AliceLink.UsesOpus = match.BobLink.UsesOpus = true;
+        match.AliceVoice.SetMic(true);
+        match.Run(100, f => Tone(f, -25));
+        Assert.InRange(match.AliceLink.Sent, 30, 36);
+        Assert.Equal(0, match.BobCodec.Decoded);
+        Assert.True(match.BobOutput.Played.Count >= 90 * N);
+        Assert.InRange(Db(match.BobOutput.Played.ToArray()), -38, -20);
     }
 
     [Fact]

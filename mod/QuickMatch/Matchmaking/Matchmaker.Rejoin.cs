@@ -9,9 +9,9 @@ using MegaCrit.Sts2.Core.Multiplayer;
 using MegaCrit.Sts2.Core.Multiplayer.Game;
 using MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect;
 using MegaCrit.Sts2.Core.Nodes.Screens.MainMenu;
-using MegaCrit.Sts2.Core.Platform;
 using MegaCrit.Sts2.Core.Saves;
 using QuickMatch.Localization;
+using QuickMatch.Lobby;
 using QuickMatch.Steam;
 using QuickMatch.Ui;
 
@@ -60,7 +60,7 @@ internal static partial class Matchmaker
                         if (question == null)
                         {
                             MainFile.Logger.Info($"no lobby for run {record.Key} found; asking whether to reopen it as its host");
-                            question = RegroupPrompt.AskTakeOver(PlatformUtil.GetPlayerName(PlatformType.Steam, lost.OldHost),
+                            question = RegroupPrompt.AskTakeOver(LobbyBackend.NameOf(lost.OldHost),
                                 MigrationPolicy.AnswerSeconds, MigrationPolicy.HasNext(lost.Order, RunRecord.LocalPlayerId()));
                             askedAt = elapsed;
                         }
@@ -126,8 +126,8 @@ internal static partial class Matchmaker
         {
             return Loc.Get("QUICKMATCH.rejoin_waiting");
         }
-        return Loc.With("QUICKMATCH.rejoin_waiting_for", "host", PlatformUtil.GetPlayerName(PlatformType.Steam, lost!.OldHost),
-            "player", PlatformUtil.GetPlayerName(PlatformType.Steam, turn));
+        return Loc.With("QUICKMATCH.rejoin_waiting_for", "host", LobbyBackend.NameOf(lost!.OldHost),
+            "player", LobbyBackend.NameOf(turn));
     }
 
     private static async Task<bool> ReopenRunAsync(RunRecord record, SerializableRun? hostRun, CancellationToken ct)

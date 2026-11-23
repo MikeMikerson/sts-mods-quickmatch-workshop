@@ -13,7 +13,7 @@ internal static class SteamVoiceWire
 {
     public const byte Magic0 = (byte)'Q';
     public const byte Magic1 = (byte)'V';
-    public const byte FormatVersion = 2;
+    public const byte FormatVersion = 3;
     public const int HeaderSize = 11;
 
     public const int MaxBytes = HeaderSize + VoicePacket.MaxChunksPartBytes;

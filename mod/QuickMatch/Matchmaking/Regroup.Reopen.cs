@@ -9,9 +9,9 @@ using MegaCrit.Sts2.Core.Nodes.Audio;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.Screens.CharacterSelect;
 using MegaCrit.Sts2.Core.Nodes.Screens.MainMenu;
-using MegaCrit.Sts2.Core.Platform;
 using MegaCrit.Sts2.Core.Runs;
 using MegaCrit.Sts2.Core.Saves;
+using QuickMatch.Lobby;
 using QuickMatch.Steam;
 using QuickMatch.Transport;
 using QuickMatch.Ui;
@@ -54,8 +54,7 @@ internal static partial class Regroup
         {
             return;
         }
-        // A quick-match run's players are always Steam players.
-        string name = PlatformUtil.GetPlayerName(PlatformType.Steam, playerId);
+        string name = LobbyBackend.NameOf(playerId);
         if (RunRecord.Current?.Banned.Contains(playerId) == true)
         {
             // Voted out of the run: they never come back, so there is nothing to wait for.
@@ -122,15 +121,26 @@ internal static partial class Regroup
             MainFile.Logger.Warn("regroup: the multiplayer save could not be read; use Load by hand");
             return;
         }
+        if (SavedQuickMatchKey(save.SaveData) is { } key)
+        {
+            await SearchThenHostAsync(save.SaveData, key);
+            return;
+        }
         submenu.StartHost(save.SaveData);
     }
+
+    public static string? SavedQuickMatchKey(SerializableRun save) =>
+        RunRecord.Current is { } record && RunRecord.KeyOf(save) == record.Key
+            && StartScreens.FromGame(save.GameMode, GameVersions.IsCustom(save)) != null ? record.Key : null;
 
     // Reopens our save the way the Multiplayer menu's own host step does for a standard run (four slots; the load
     // lobby admits only the save's players), and makes it findable by the run key.
     public static async Task HostSavedRunAsync(SerializableRun run, string key)
     {
+        bool runVoice = false;
         if (RunRecord.Current is { } record && record.Key == key)
         {
+            runVoice = record.Voice;
             MatchVoice.Set(MatchVoice.ForRun(record.Voice, MatchChoice.Voice));
         }
         NMainMenuSubmenuStack? stack = NGame.Instance?.MainMenu?.SubmenuStack;
@@ -139,9 +149,9 @@ internal static partial class Regroup
             MainFile.Logger.Warn("regroup: no main menu to host from");
             return;
         }
-        MainFile.Logger.Info($"reopening quick-match run {key} over Steam sockets {MatchVoice.Text(MatchVoice.On)}");
+        MainFile.Logger.Info($"reopening quick-match run {key} {MatchVoice.Text(MatchVoice.On)}");
         var netService = new QuickMatchHostService();
-        NetErrorInfo? error = await netService.StartQuickMatchHost(4);
+        NetErrorInfo? error = await netService.StartQuickMatchHost(4, runVoice);
         if (error.HasValue)
         {
             MainFile.Logger.Warn($"could not reopen the run: {error.Value.GetReason()}");

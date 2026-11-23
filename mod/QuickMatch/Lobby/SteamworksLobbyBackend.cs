@@ -187,7 +187,7 @@ internal sealed class SteamworksLobbyBackend : ILobbyBackend
         return members;
     }
 
-    public bool SendChat(ulong lobby, byte[] data, int length) =>
+    public bool SendChat(ulong lobby, byte[] data, int length, ulong target) =>
         SteamMatchmaking.SendLobbyChatMsg(new CSteamID(lobby), data, length);
 
     public string? PlayerName(ulong id)
@@ -200,6 +200,16 @@ internal sealed class SteamworksLobbyBackend : ILobbyBackend
     {
         EFriendRelationship relationship = SteamFriends.GetFriendRelationship(new CSteamID(id));
         return relationship is EFriendRelationship.k_EFriendRelationshipIgnored or EFriendRelationship.k_EFriendRelationshipIgnoredFriend;
+    }
+
+    public bool ShowProfile(ulong id)
+    {
+        if (!SteamUtils.IsOverlayEnabled())
+        {
+            return false;
+        }
+        SteamFriends.ActivateGameOverlayToUser("steamid", new CSteamID(id));
+        return true;
     }
 
     private void OnChat(LobbyChatMsg_t message)

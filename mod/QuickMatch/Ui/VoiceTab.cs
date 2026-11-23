@@ -121,7 +121,7 @@ internal sealed class VoiceTab
             _note.Text = note;
         }
 
-        bool on = session?.LocalState is LocalVoiceState.Live or LocalVoiceState.Speaking;
+        bool on = session?.LocalState is LocalVoiceState.Live or LocalVoiceState.Speaking or LocalVoiceState.Asking;
         bool enabled = VoiceChat.InMatch && session != null && VoiceText.WhyNoMic(session) == null;
         if (_mic != null && _mic.IsNodeReady())
         {
@@ -183,9 +183,10 @@ internal sealed class VoiceTab
     private void RebuildPlayers(VoiceSession? session)
     {
         bool inMatch = VoiceChat.InMatch && session != null;
-        List<ulong> members = inMatch ? VoiceChat.Members.Where(id => id != VoiceChat.LocalId).ToList() : [];
-        List<ulong> remembered = VoiceStore.Mutes.Muted.Where(id => !members.Contains(id) && id != VoiceChat.LocalId).ToList();
-        string shown = $"{inMatch}|{members.Count > 0}|{string.Join(",", remembered)}";
+        List<(ulong Player, TeammateState State)> teammates = inMatch ? VoiceChat.Teammates.ToList() : [];
+        List<ulong> remembered = VoiceStore.Mutes.Muted
+            .Where(id => id != VoiceChat.LocalId && !teammates.Contains((id, TeammateState.OnVoice))).ToList();
+        string shown = $"{inMatch}|{string.Join(",", teammates)}|{string.Join(",", remembered)}";
         if (shown == _playersShown)
         {
             return;
@@ -200,8 +201,13 @@ internal sealed class VoiceTab
         if (inMatch)
         {
             GameLook.Heading(_players, Loc.Get("QUICKMATCH.VOICE.players"));
-            GameLook.Note(_players, Loc.Get(members.Count == 0 ? "QUICKMATCH.VOICE.no_players" : "QUICKMATCH.VOICE.players_hint"), GameLook.Cream, 24);
-            if (members.Count > 0)
+            GameLook.Note(_players, Loc.Get(teammates.Count == 0 ? "QUICKMATCH.VOICE.no_players" : "QUICKMATCH.VOICE.players_hint"), GameLook.Cream, 24);
+            int row = 0;
+            foreach ((ulong player, TeammateState state) in teammates)
+            {
+                _refresh.Add(new TeammateRow(_players, player, state, row++).Refresh);
+            }
+            if (teammates.Any(t => t.State == TeammateState.OnVoice))
             {
                 GameLook.Row(_players, "", "QuickMatchMuteEveryoneRow")
                     .AddChild(GameLook.Button("QuickMatchMuteEveryone", Loc.Get("QUICKMATCH.VOICE.mute_everyone"), VoiceChat.MuteEveryone));
@@ -216,6 +222,35 @@ internal sealed class VoiceTab
                 _refresh.Add(new MutedRow(_players, player, n++).Refresh);
             }
             GameLook.Note(_players, Loc.Get("QUICKMATCH.VOICE.private_note"));
+        }
+    }
+
+    private sealed class TeammateRow
+    {
+        private readonly ulong _player;
+        private readonly TeammateState _state;
+        private readonly MegaLabel _status;
+
+        public TeammateRow(VBoxContainer page, ulong player, TeammateState state, int n)
+        {
+            _player = player;
+            _state = state;
+            GameLook.Row(page, VoiceChat.NameOf(player), $"QuickMatchVoicePlayer{n}", out _, out _status);
+            Refresh();
+        }
+
+        public void Refresh()
+        {
+            string status = _state switch
+            {
+                TeammateState.OnVoice when VoiceChat.Session is { } session => VoiceText.StatusOf(session, _player),
+                TeammateState.Left => Loc.Get("QUICKMATCH.VOICE.status_left"),
+                _ => Loc.Get("QUICKMATCH.VOICE.status_playing_no_voice"),
+            };
+            if (_status.Text != status)
+            {
+                _status.Text = status;
+            }
         }
     }
 

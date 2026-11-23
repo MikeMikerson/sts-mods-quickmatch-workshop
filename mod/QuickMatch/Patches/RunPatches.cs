@@ -41,6 +41,27 @@ public static class RunPatches
         }
     }
 
+    [PatchFeature(GameFeature.Regroup)]
+    [HarmonyPatch(typeof(NMultiplayerSubmenu), "StartLoad")]
+    public static class LoadQuickMatchRun
+    {
+        public static bool Prefix()
+        {
+            if (!Matchmaker.IsAvailable || RunRecord.Current is not { IsHost: true })
+            {
+                return true;
+            }
+            // Steam's game API can return an offline ID on a lobby-chat platform.
+            ReadSaveResult<SerializableRun> save = SaveManager.Instance.LoadAndCanonicalizeMultiplayerRunSave(RunRecord.LocalPlayerId());
+            if (!save.Success || save.SaveData == null || Regroup.SavedQuickMatchKey(save.SaveData) is not { } key)
+            {
+                return true;
+            }
+            TaskHelper.RunSafely(Regroup.SearchThenHostAsync(save.SaveData, key));
+            return false;
+        }
+    }
+
     // A client that loses the host mid-run goes to the rejoin search instead of the main menu with an error
     // popup. Not called for game over or abandon (vanilla filters those first).
     [PatchFeature(GameFeature.Regroup)]
@@ -67,10 +88,9 @@ public static class RunPatches
     {
         public static bool Prefix(SerializableRun run)
         {
-            string? key = RunRecord.KeyOf(run);
-            if (key == null || RunRecord.Current?.Key != key || StartScreens.FromGame(run.GameMode, GameVersions.IsCustom(run)) == null)
+            if (Regroup.SavedQuickMatchKey(run) is not { } key)
             {
-                MainFile.Logger.Info($"loaded run key={key} is not our quick-match run; vanilla host");
+                MainFile.Logger.Info($"loaded run key={RunRecord.KeyOf(run)} is not our quick-match run; vanilla host");
                 return true;
             }
             TaskHelper.RunSafely(Regroup.SearchThenHostAsync(run, key));

@@ -4,12 +4,14 @@ using QuickMatch.Localization;
 
 namespace QuickMatch.Ui;
 
-// The Quick Match screen: one window in the game's look (GameWindow) with two of the settings screen's tabs,
-// Voice (VoiceTab) and Blocked players (BlockedTab). Each tab scrolls in a page of one height, so switching
-// tabs does not move the window. Done, Esc, the controller's back or a click outside closes it.
+// The Quick Match screen: one window in the game's look (GameWindow) with three of the settings screen's tabs,
+// Voice (VoiceTab), Blocked players (BlockedTab) and Recent players (RecentTab). Each tab scrolls in a page of
+// one height, so switching tabs does not move the window. Done, Esc, the controller's back or a click outside
+// closes it.
 //
-// Node names: the window QuickMatchMenu, the tabs QuickMatchVoiceTab and QuickMatchBlockedTab, the pages
-// QuickMatchVoicePage and QuickMatchBlockedPage, and QuickMatchMenuDone.
+// Node names: the window QuickMatchMenu, the tabs QuickMatchVoiceTab, QuickMatchBlockedTab and
+// QuickMatchRecentTab, the pages QuickMatchVoicePage, QuickMatchBlockedPage and QuickMatchRecentPage, and
+// QuickMatchMenuDone.
 internal sealed class QuickMatchMenu
 {
     internal const string NodeName = "QuickMatchMenu";
@@ -20,10 +22,13 @@ internal sealed class QuickMatchMenu
     private readonly GameWindow _window;
     private readonly NSettingsTab? _voiceTab;
     private readonly NSettingsTab? _blockedTab;
+    private readonly NSettingsTab? _recentTab;
     private readonly Control _voicePage;
     private readonly Control _blockedPage;
+    private readonly Control _recentPage;
     private readonly VoiceTab _voice;
     private readonly BlockedTab _blocked;
+    private readonly RecentTab _recent;
     private SceneTree? _tree;
     private MenuTab _shown;
 
@@ -55,7 +60,8 @@ internal sealed class QuickMatchMenu
         _window.Page.AddChild(tabs);
         _voiceTab = GameLook.Tab("QuickMatchVoiceTab", Loc.Get("QUICKMATCH.MENU.voice"), () => Show(MenuTab.Voice));
         _blockedTab = GameLook.Tab("QuickMatchBlockedTab", Loc.Get("QUICKMATCH.MENU.blocked"), () => Show(MenuTab.Blocked));
-        foreach (NSettingsTab? each in new[] { _voiceTab, _blockedTab })
+        _recentTab = GameLook.Tab("QuickMatchRecentTab", Loc.Get("QUICKMATCH.MENU.recent"), () => Show(MenuTab.Recent));
+        foreach (NSettingsTab? each in new[] { _voiceTab, _blockedTab, _recentTab })
         {
             if (each != null)
             {
@@ -70,6 +76,9 @@ internal sealed class QuickMatchMenu
         VBoxContainer blockedPage = GameLook.ScrollPage(_window.Page, "QuickMatchBlockedPage", PageHeight);
         _blockedPage = (Control)blockedPage.GetParent().GetParent();
         _blocked = new BlockedTab(blockedPage);
+        VBoxContainer recentPage = GameLook.ScrollPage(_window.Page, "QuickMatchRecentPage", PageHeight);
+        _recentPage = (Control)recentPage.GetParent().GetParent();
+        _recent = new RecentTab(recentPage);
 
         Button done = GameLook.Button("QuickMatchMenuDone", Loc.Get("QUICKMATCH.OPTIONS.done"), Close, look: ButtonLook.Yes);
         _window.Buttons.AddChild(done);
@@ -84,9 +93,11 @@ internal sealed class QuickMatchMenu
         _shown = tab;
         _voicePage.Visible = tab == MenuTab.Voice;
         _blockedPage.Visible = tab == MenuTab.Blocked;
+        _recentPage.Visible = tab == MenuTab.Recent;
         // A tab's picture and outline are set up in its _Ready: before then it is selected once it is ready.
         Select(_voiceTab, tab == MenuTab.Voice);
         Select(_blockedTab, tab == MenuTab.Blocked);
+        Select(_recentTab, tab == MenuTab.Recent);
     }
 
     private static void Select(NSettingsTab? tab, bool selected)
@@ -112,13 +123,17 @@ internal sealed class QuickMatchMenu
 
     private void OnProcessFrame()
     {
-        if (_shown == MenuTab.Voice)
+        switch (_shown)
         {
-            _voice.Refresh();
-        }
-        else
-        {
-            _blocked.Refresh();
+            case MenuTab.Voice:
+                _voice.Refresh();
+                break;
+            case MenuTab.Blocked:
+                _blocked.Refresh();
+                break;
+            default:
+                _recent.Refresh();
+                break;
         }
     }
 

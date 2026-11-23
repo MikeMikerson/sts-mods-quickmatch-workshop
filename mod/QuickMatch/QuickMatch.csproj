@@ -19,6 +19,34 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);bin/**;obj/**</DefaultItemExcludes>
   </PropertyGroup>
 
+  <ItemGroup Condition="'$(QuickMatchPlatform)' != 'iPhone'">
+    <ProjectReference Include="../QuickMatch.SteamKit/QuickMatch.SteamKit.csproj" Private="false" />
+    <Compile Remove="Platforms/IPhone/**/*.cs" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(QuickMatchPlatform)' == 'iPhone'">
+    <AssemblyName>QuickMatch</AssemblyName>
+    <DefineConstants>$(DefineConstants);IPHONE</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(QuickMatchPlatform)' == 'iPhone'">
+    <Reference Include="STS2Mobile.ModApi" HintPath="$(ModApiPath)" Private="false" />
+    <Compile Remove="Platforms/Android/**/*.cs;Platforms/Desktop/**/*.cs;Platforms/Relay/**/*.cs" />
+    <Compile Remove="Patches/GamePatches.cs;Patches/LinkJoinPatches.cs;Lobby/SteamworksLobbyBackend.cs" />
+    <Compile Remove="Transport/MixedHost.cs;Transport/MixedRoutes.cs;Voice/SteamVoiceDevice.cs;Voice/SteamVoiceDecoder.cs" />
+  </ItemGroup>
+  <Target Name="CheckIPhoneInputs" BeforeTargets="PrepareForBuild" Condition="'$(QuickMatchPlatform)' == 'iPhone'">
+    <Error Condition="'$(GameVersion)' != '0.113'" Text="The iPhone package requires game version 0.113." />
+    <Error Condition="!Exists('$(ModApiPath)')" Text="Set ModApiPath to the launcher's net9.0 STS2Mobile.ModApi.dll." />
+  </Target>
+
+  <Target Name="EmbedSteamKit" AfterTargets="ResolveAssemblyReferences" Condition="'$(QuickMatchPlatform)' != 'iPhone'">
+    <ItemGroup>
+      <_SteamKitBuilt Include="@(ReferencePath)" Condition=" '%(Filename)' == 'QuickMatch.SteamKit' " />
+      <EmbeddedResource Include="@(_SteamKitBuilt)" LogicalName="QuickMatch.SteamKit.dll" WithCulture="false" Type="Non-Resx" />
+    </ItemGroup>
+    <Error Condition=" '@(_SteamKitBuilt)' == '' " Text="QuickMatch.SteamKit.dll was not built" />
+  </Target>
+
   <!-- The stable branch has no Blitz or Dread. -->
   <PropertyGroup Condition=" '$(GameVersion)' == '0.111' ">
     <DefineConstants>$(DefineConstants);GAME_0111</DefineConstants>

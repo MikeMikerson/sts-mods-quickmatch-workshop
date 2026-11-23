@@ -13,6 +13,8 @@
     <GameVersion Condition=" '$(GameVersion)' == '' ">0.113</GameVersion>
     <BaseOutputPath>bin/$(GameVersion)/</BaseOutputPath>
     <BaseIntermediateOutputPath>obj/$(GameVersion)/</BaseIntermediateOutputPath>
+    <BaseOutputPath Condition="'$(QuickMatchPlatform)' == 'iPhone'">bin/iPhone/</BaseOutputPath>
+    <BaseIntermediateOutputPath Condition="'$(QuickMatchPlatform)' == 'iPhone'">obj/iPhone/</BaseIntermediateOutputPath>
   </PropertyGroup>
   <PropertyGroup>
     <Sts2AppPath Condition=" '$(Sts2AppPath)' == '' ">$(HOME)/Library/Application Support/Steam/steamapps/common/Slay the Spire 2/SlayTheSpire2.app</Sts2AppPath>
