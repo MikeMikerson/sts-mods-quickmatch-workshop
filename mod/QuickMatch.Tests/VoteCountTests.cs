@@ -19,6 +19,27 @@ public class VoteCountTests
     private static KickVote Vote(ulong self, bool inRun = false) => new() { Self = self, HostCanBeRemoved = inRun };
 
     [Fact]
+    public void GuestsCanBeRemovedButCannotStartOrCastVotes()
+    {
+        var modded = Players(Host, B);
+        var vote = new KickVote { Self = Host, IsVoter = modded.Contains };
+        var lobby = Players(Host, B, C, D);
+        Assert.False(vote.CanStart(C, D, Host, lobby, 0));
+        Assert.Equal(VoteOutcome.Ignored, vote.Receive(C, D, true, Host, lobby, 0));
+        Assert.Equal(VoteOutcome.Started, vote.Receive(B, D, true, Host, lobby, 0));
+        Assert.Equal(2, vote.YesNeeded);
+        Assert.Equal(VoteOutcome.Ignored, vote.Receive(C, D, true, Host, lobby, 1));
+        Assert.Equal(VoteOutcome.Passed, vote.Receive(Host, D, true, Host, lobby, 2));
+    }
+
+    [Fact]
+    public void AHostCanRemoveAGuestWhenAllOtherPlayersAreGuests()
+    {
+        var vote = new KickVote { Self = Host, IsVoter = id => id == Host };
+        Assert.Equal(VoteOutcome.Passed, vote.Receive(Host, B, true, Host, Players(Host, B, C), 0));
+    }
+
+    [Fact]
     public void TheHostDecidesAVoteAgainstAClientAndTheStarterOneAgainstTheHost()
     {
         KickVote client = Vote(C);

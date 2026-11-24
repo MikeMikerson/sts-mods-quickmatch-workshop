@@ -38,7 +38,11 @@ internal sealed class VoteQuestion
         string name = BlockPlayers.NameOf(player);
         bool inRun = BlockPlayers.InRunWith(player);
         _window = new GameWindow(tree, NodeName, Loc.With(inRun ? "QUICKMATCH.VOTE.ask_run" : "QUICKMATCH.VOTE.ask", "player", name), null, 960, Cancel);
-        string hint = !inRun ? "QUICKMATCH.VOTE.hint" : BlockPlayers.AsksAboutHost(player) ? "QUICKMATCH.VOTE.hint_run_host" : "QUICKMATCH.VOTE.hint_run";
+        string hint = inRun ? "QUICKMATCH.VOTE.hint_run" : "QUICKMATCH.VOTE.hint";
+        if (BlockPlayers.AsksAboutHost(player))
+        {
+            hint = RunRecord.Current?.HasGuests == true ? "QUICKMATCH.VOTE.hint_guest_run_host" : "QUICKMATCH.VOTE.hint_run_host";
+        }
         _window.AddBody(Loc.With(hint, "player", name));
         Button? safe = null;
         foreach (VoteAnswer answer in LookLayout.VoteAnswers())

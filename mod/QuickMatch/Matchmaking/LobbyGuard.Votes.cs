@@ -81,7 +81,7 @@ internal static partial class LobbyGuard
         while (Inbox.TryDequeue(out (ulong Sender, byte[] Data) message))
         {
             // Our own messages come back from Steam; we counted them when we sent them.
-            if (message.Sender == self)
+            if (message.Sender == self || !IsQuickMatchPeer(message.Sender))
             {
                 continue;
             }

@@ -12,6 +12,7 @@ using MegaCrit.Sts2.Core.Nodes.Screens.MainMenu;
 using MegaCrit.Sts2.Core.Runs;
 using QuickMatch.Localization;
 using QuickMatch.Lobby;
+using QuickMatch.Transport;
 using QuickMatch.Ui;
 using QuickMatch.Voice;
 
@@ -40,23 +41,32 @@ internal static partial class Regroup
 
     public static bool InQuickMatchRun { get; private set; }
 
+    public static bool UsesQuickMatchRecovery => InQuickMatchRun && RunRecord.Current is { HasGuests: false };
+
     public static void OnRunLaunched(RunState state)
     {
         RunManager run = RunManager.Instance;
+        if (run.NetService is QuickMatchHostService host)
+        {
+            host.CloseGuestAdmission();
+        }
         if (Matchmaker.PendingRunStart is { } pending)
         {
             Matchmaker.PendingRunStart = null;
             // A run launches a few seconds after embarking; an old marker belongs to a start that failed.
             if (Godot.Time.GetTicksMsec() - pending.At < PendingRunMaxAgeMs)
             {
-                RunRecord.Save(state, pending.HostId, pending.Size, pending.Voice, pending.DesktopPlayers);
+                RunRecord.Save(state, pending.HostId, pending.Size, pending.Voice, pending.DesktopPlayers, pending.GuestPlayers);
             }
         }
         InQuickMatchRun = RunRecord.Matches(state);
         if (InQuickMatchRun)
         {
             MatchVoice.Set(MatchVoice.ForRun(RunRecord.Current!.Voice, MatchChoice.Voice));
-            NoteHost(run, RunRecord.Current.Key);
+            if (UsesQuickMatchRecovery)
+            {
+                NoteHost(run, RunRecord.Current.Key);
+            }
         }
         _promptOpen = false;
         _regrouping = false;
@@ -66,10 +76,10 @@ internal static partial class Regroup
         {
             LobbyGuard.BeginRun(run.NetService);
         }
-        StandIn.OnRunLaunched(state, InQuickMatchRun);
-        RunRejoin.OnRunLaunched(state, InQuickMatchRun);
+        StandIn.OnRunLaunched(state, UsesQuickMatchRecovery);
+        RunRejoin.OnRunLaunched(state, UsesQuickMatchRecovery);
         MainFile.Logger.Info($"run launched: quick match={InQuickMatchRun} key={RunRecord.KeyOf(state)} as {run.NetService.Type}{(InQuickMatchRun ? " " + MatchVoice.Text(MatchVoice.On) : "")}");
-        if (InQuickMatchRun && run.NetService.Type == NetGameType.Host && run.RunLobby != null)
+        if (UsesQuickMatchRecovery && run.NetService.Type == NetGameType.Host && run.RunLobby != null)
         {
             _trackedLobby = run.RunLobby;
             _trackedLobby.RemotePlayerDisconnected += OnRemotePlayerDisconnected;
@@ -148,7 +158,7 @@ internal static partial class Regroup
         try
         {
             RunManager run = RunManager.Instance;
-            if (!InQuickMatchRun || run.IsAbandoned || RunRecord.Current?.Banned.Contains(player) == true)
+            if (!UsesQuickMatchRecovery || run.IsAbandoned || RunRecord.Current?.Banned.Contains(player) == true)
             {
                 return;
             }

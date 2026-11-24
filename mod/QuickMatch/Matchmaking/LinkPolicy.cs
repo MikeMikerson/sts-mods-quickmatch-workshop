@@ -20,14 +20,18 @@ internal enum LinkVerdict
 
 internal readonly record struct LinkLobby(RunMode Mode, int Size, bool AnySize, int Ascension, bool Voice, bool HostOffersSockets);
 
-// A Steam invite or steam://joinlobby link to a quick-match lobby joins through Quick Match, with the checks a search
-// makes by its filters; a host turns away a joiner without Quick Match.
+internal enum PeerAdmission
+{
+    QuickMatch,
+    Guest,
+    OtherRelease,
+    GuestsUnavailable,
+}
+
+// A Steam invite to a quick-match lobby uses the same checks as a search.
 internal static class LinkPolicy
 {
     public const uint SteamAppId = 2868840;
-
-    // Plain ASCII, under 100 characters and no square brackets: the joiner's game shows it in a BBCode popup.
-    public const string NoQuickMatchReason = "This is a Quick Match lobby. Get the Quick Match mod on the Steam Workshop to join.";
 
     public static IReadOnlyList<string> Keys { get; } =
     [
@@ -48,8 +52,21 @@ internal static class LinkPolicy
         string.Create(CultureInfo.InvariantCulture, $"steam://joinlobby/{SteamAppId}/{lobby}/{host}");
 
     // The handshake lists mods as "<id>-<version>".
-    public static bool HasQuickMatch(IEnumerable<string>? mods, string modId) =>
-        mods?.Any(m => m.StartsWith(modId + "-", StringComparison.Ordinal)) == true;
+    public static string? QuickMatchRelease(IEnumerable<string>? otherMods, IEnumerable<string>? gameplayMods, string modId)
+    {
+        string prefix = modId + "-";
+        return otherMods?.FirstOrDefault(m => m.StartsWith(prefix, StringComparison.Ordinal))
+            ?? gameplayMods?.FirstOrDefault(m => m.StartsWith(prefix, StringComparison.Ordinal));
+    }
+
+    public static PeerAdmission Admit(string? localRelease, string? remoteRelease, bool acceptsSocketGuest)
+    {
+        if (remoteRelease == null)
+        {
+            return acceptsSocketGuest ? PeerAdmission.Guest : PeerAdmission.GuestsUnavailable;
+        }
+        return remoteRelease == localRelease ? PeerAdmission.QuickMatch : PeerAdmission.OtherRelease;
+    }
 
     public static bool IsQuickMatch(IReadOnlyDictionary<string, string> data) =>
         !string.IsNullOrEmpty(data.GetValueOrDefault(LobbyKeys.Proto));

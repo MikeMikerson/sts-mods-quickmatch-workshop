@@ -94,7 +94,10 @@ internal static partial class Matchmaker
             LobbyGuard.NoteMovingEveryone();
             foreach (ulong peer in host.ConnectedPeers.Select(p => p.peerId).ToList())
             {
-                host.SendMessage(new QuickMatchLeaveMessage { reason = LeaveReasons.HostIdle }, peer);
+                if (IsQuickMatchPeer(peer))
+                {
+                    host.SendMessage(new QuickMatchLeaveMessage { reason = LeaveReasons.HostIdle }, peer);
+                }
             }
             await WaitForClientsToLeaveAsync(host, ct);
         }

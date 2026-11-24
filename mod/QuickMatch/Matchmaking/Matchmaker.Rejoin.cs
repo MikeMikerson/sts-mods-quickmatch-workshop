@@ -13,7 +13,9 @@ using MegaCrit.Sts2.Core.Saves;
 using QuickMatch.Localization;
 using QuickMatch.Lobby;
 using QuickMatch.Steam;
+using QuickMatch.Transport;
 using QuickMatch.Ui;
+using QuickMatch.Voice;
 
 namespace QuickMatch.Matchmaking;
 
@@ -25,6 +27,11 @@ internal static partial class Matchmaker
     // The game's load lobby takes over once joined; it only admits players who are in the save.
     private static async Task RejoinAsync(RunRecord record, CancellationToken ct, double? hostAfter, SerializableRun? hostRun, LostHost? lost)
     {
+        if (record.HasGuests)
+        {
+            hostAfter = null;
+            lost = null;
+        }
         ulong started = Time.GetTicksMsec();
         // A question asked at our turn has its minute to be answered before the search may time out.
         double timeout = MigrationPolicy.SearchTimeoutSeconds(RejoinTimeoutSeconds, hostAfter + (lost?.Asks == true ? MigrationPolicy.AnswerSeconds : 0));
@@ -45,7 +52,7 @@ internal static partial class Matchmaker
                         continue;
                     }
                     // An open question stays until the join is made (then it closes as we leave), so a failed join keeps our turn.
-                    if (await TryJoinResumeAsync(lobbyId, ct, skipped))
+                    if (await TryJoinResumeAsync(lobbyId, record.Key, record.HasGuests, ct, skipped))
                     {
                         return;
                     }
@@ -146,11 +153,33 @@ internal static partial class Matchmaker
         return true;
     }
 
-    private static async Task<bool> TryJoinResumeAsync(ulong lobbyId, CancellationToken ct, HashSet<ulong> skipped)
+    public static void StartGuestSaveLink(ulong lobbyId, string key, bool voice)
+    {
+        if (!IsAvailable || State != MatchState.Idle || key.Length == 0)
+        {
+            QuickMatchHub.ShowStatus(Loc.Get("QUICKMATCH.LINK.failed"));
+            return;
+        }
+        MatchVoice.Set(MatchVoice.ForRun(voice, MatchChoice.Voice));
+        LobbyLinks.Remember(lobbyId, offersSockets: true);
+        _cts = new CancellationTokenSource();
+        var ct = _cts.Token;
+        SetState(MatchState.Rejoining, "invite to saved run");
+        _ = RunAsync(_generation, ct, async () =>
+        {
+            if (!await TryJoinResumeAsync(lobbyId, key, true, ct, []))
+            {
+                Reset("could not join saved run");
+                QuickMatchHub.ShowStatus(Loc.Get("QUICKMATCH.LINK.failed"));
+            }
+        }, "invite to saved run");
+    }
+
+    private static async Task<bool> TryJoinResumeAsync(ulong lobbyId, string key, bool guestSave, CancellationToken ct, HashSet<ulong> skipped)
     {
         ct.ThrowIfCancellationRequested();
         QuickMatchHub.ShowStatus(Loc.Get("QUICKMATCH.joining"));
-        if (await ConnectAsync(lobbyId, ct, rejoin: true) is not { } connected)
+        if (await ConnectAsync(lobbyId, ct, rejoin: !guestSave) is not { } connected)
         {
             return false;
         }
@@ -159,11 +188,17 @@ internal static partial class Matchmaker
         try
         {
             ct.ThrowIfCancellationRequested();
+            var record = RunRecord.Current;
+            if (record?.Key != key)
+            {
+                record = null;
+            }
             // Steam names a lobby's owner only to its members, so a host voted out of the run is found once connected.
             if (flow.NetService is NetClientGameService { IsConnected: true } client
-                && RunKickPolicy.SkipsHost(client.HostNetId, RunRecord.Current?.Banned ?? []))
+                && (RunKickPolicy.SkipsHost(client.HostNetId, record?.Banned ?? [])
+                    || record is { HasGuests: true } && client.HostNetId != record.HostId))
             {
-                MainFile.Logger.Info($"rejoin {lobbyId}: its host was voted out of the run; skipping it");
+                MainFile.Logger.Info($"rejoin {lobbyId}: its host cannot reopen this run; skipping it");
                 skipped.Add(lobbyId);
                 watcher?.Dispose();
                 flow.NetService.Disconnect(NetError.Quit);
@@ -191,11 +226,26 @@ internal static partial class Matchmaker
                 flow.NetService.Disconnect(NetError.Quit);
                 return false;
             }
-            if (BlockPolicy.FirstBlockedInRun(result.loadJoinResponse.Value.serializableRun.Players.Select(p => p.NetId), flow.NetService.NetId, BlockStore.IsBlocked, RunRecord.Current?.Stayed ?? []) != 0)
+            var save = result.loadJoinResponse.Value.serializableRun;
+            List<ulong> players = save.Players.Select(p => p.NetId).ToList();
+            if (!RejoinPolicy.AcceptsAnswer(RunRecord.KeyOf(save), key, players, flow.NetService.NetId)
+                || BlockPolicy.FirstBlockedInRun(players, flow.NetService.NetId, BlockStore.IsBlocked, record?.Stayed ?? []) != 0)
             {
-                MainFile.Logger.Info($"rejoin {lobbyId}: a player in the saved run is blocked; not rejoining");
+                MainFile.Logger.Info($"rejoin {lobbyId}: saved run or players do not match; not rejoining");
                 flow.NetService.Disconnect(NetError.Quit);
                 return false;
+            }
+            if (guestSave)
+            {
+                ulong host = ((NetClientGameService)flow.NetService).HostNetId;
+                var guests = ResumeLobby.ReadGuests(LobbyBackend.Current.GetData(lobbyId, ResumeLobby.Guests), players, host);
+                if (guests == null)
+                {
+                    flow.NetService.Disconnect(NetError.Quit);
+                    return false;
+                }
+                bool voice = LobbyBackend.Current.GetData(lobbyId, LobbyKeys.Voice) == LobbyKeys.VoiceOn;
+                RunRecord.RestoreGuests(key, host, players, voice, guests);
             }
             NMainMenuSubmenuStack stack = Stack() ?? throw new InvalidOperationException("main menu is gone");
             NMultiplayerLoadGameScreen screen = stack.GetSubmenuType<NMultiplayerLoadGameScreen>();

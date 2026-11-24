@@ -1,25 +1,28 @@
 # Quick Match
 
 Find a Slay the Spire 2 co-op partner without chasing lobby links. Open **Multiplayer > Quick Match** and
-press **Play Now** to meet players looking for the same run. If someone disconnects, **Rejoin Run** brings
-them back. If the host leaves, another player can pick up the last autosave.
+press **Play Now** to meet players looking for the same run. On desktop, you can also invite a friend
+who plays without Quick Match. Choose **Copy Invite Link** in the lobby and share it through Steam or Discord.
+Your friend opens the link, picks a character and presses Embark as usual.
 
 Windows and macOS players can join the same run.
 
 ## Features
 
 - **Match Options**: the game mode (Standard, or Blitz and Dread once unlocked), the party size (2, 3, 4 or
-  Any), the Ascension and voice chat on or off. You only meet players who chose the same.
+  Any), the Ascension and voice chat on or off. Searches match those preferences.
 - **Voice chat** starts with your mic muted. Mute another player or adjust their volume during a run.
   Choose **No Voice** to play without sending or receiving voice.
-- **Emotes**: the button beside your name pops a status icon over your character, so everyone sees that your
+- **Emotes**: the button beside your name pops a status icon over your character, so teammates with Quick Match see that your
   hand can apply Vulnerable, Weak, Strength or Poison, or that you are asking who can. It works with or without
   voice, uses the game's own icons, and you can hide any player's emotes.
-- **Invite links**: on desktop, use **Copy Invite Link** in a lobby to invite a friend through Discord or chat.
-- **Starting short**: a lobby that has waited 2 minutes one or two players short can start with those there,
-  if everyone agrees.
+- **Guests** use the regular co-op interface. Players with Quick Match can still talk to each other and exchange
+  emotes. Guests count toward the party size, and matchmaking can fill the remaining seats.
+- **Starting short**: when everyone has Quick Match, a lobby that has waited 2 minutes one or two players short
+  can start early if everyone agrees. A party with a guest stays together and waits for its chosen size.
 - **Blocking and Vote to Remove**: block a player and you are never matched with them again. A vote takes a
-  player out of a lobby or a run.
+  player out of a lobby or run, including a guest. A majority of eligible Quick Match players other than
+  the target must vote yes.
 - **Recent players**: the Quick Match window lists the last players you finished a run with, each with a
   button to their Steam profile, so you can add a good teammate as a friend. The list stays on your device.
 
@@ -31,8 +34,8 @@ Start the game with Steam running and allow mods when prompted.
 
 ## Compatibility
 
-- Everyone needs Quick Match 0.30.0, the same game version and the same gameplay mods. Quick Match itself
-  needs no other mod.
+- Everyone needs the same game version and gameplay mods. Players using Quick Match need version 0.31.0
+  to play with this release. Friends using the base game can join a desktop host by Steam invite or link.
 - Supports stable v0.111.1 and the v0.113 beta. Blitz and Dread need the beta.
 - The game uses a separate save profile when mods are enabled. Unlocks start fresh there.
 - A game update can turn a Quick Match feature off until Quick Match is updated. The log says which.
@@ -41,7 +44,10 @@ Start the game with Steam running and allow mods when prompted.
 
 - Blocks and votes go by Steam ID, so a new Steam account is a new player. They keep a player away from you in
   Quick Match; they do not stop someone playing badly or leaving.
-- When the host leaves, the run carries on from its last autosave, so a fight in progress starts over.
+- When everyone embarks with Quick Match, **Rejoin Run** can bring a disconnected player back, and a new
+  host can reopen the last autosave. When a guest embarks, the group uses the game's normal disconnect
+  behavior for the rest of that run. To get back together, the original host reopens the multiplayer save
+  and shares a fresh invite.
 
 ## Reporting a problem
 

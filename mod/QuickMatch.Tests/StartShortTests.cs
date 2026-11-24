@@ -21,6 +21,17 @@ public class StartShortTests
     }
 
     [Fact]
+    public void LobbyDecisionsWaitForPendingJoinsAndResumeAfterTheLastGuestLeaves()
+    {
+        ulong[] group = [Host, A];
+        Assert.Equal(2, MatchPolicy.SettledQuickMatchGroup(group, Host, [A], group, []));
+        Assert.Equal(0, MatchPolicy.SettledQuickMatchGroup(group, Host, [A], [Host, A, B], []));
+        Assert.Equal(0, MatchPolicy.SettledQuickMatchGroup(group, Host, [B], group, []));
+        Assert.Equal(0, MatchPolicy.SettledQuickMatchGroup([Host, A, B], Host, [A, B], [Host, A, B], [B]));
+        Assert.Equal(2, MatchPolicy.SettledQuickMatchGroup(group, Host, [A], [Host], []));
+    }
+
+    [Fact]
     public void StartsOnlyWhenEveryoneAskedSaysYes()
     {
         ulong[] asked = [Host, A, B];

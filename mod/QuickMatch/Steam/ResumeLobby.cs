@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using QuickMatch.Lobby;
 using QuickMatch.Matchmaking;
 
@@ -7,6 +8,36 @@ namespace QuickMatch.Steam;
 
 internal static class ResumeLobby
 {
+    public const string Guests = "qm_saved_guests";
+
+    public static ulong[]? ReadGuests(string? value, IEnumerable<ulong> players, ulong host)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return null;
+        }
+        string[] entries = value.Split(',');
+        if (entries.Length > MatchPolicy.AnySizeMax - 1)
+        {
+            return null;
+        }
+        var party = players.ToHashSet();
+        if (!party.Contains(host))
+        {
+            return null;
+        }
+        var guests = new HashSet<ulong>();
+        foreach (string entry in entries)
+        {
+            if (!ulong.TryParse(entry, NumberStyles.None, CultureInfo.InvariantCulture, out ulong id)
+                || id == 0 || id == host || !party.Contains(id) || !guests.Add(id))
+            {
+                return null;
+            }
+        }
+        return guests.ToArray();
+    }
+
     public static bool Publish(ILobbyBackend backend, ulong lobby, string runKey, string version, string link)
     {
         backend.SetData(lobby, LobbyKeys.Version, version);
@@ -27,6 +58,7 @@ internal static class ResumeLobby
         backend.DeleteData(lobby, LobbyKeys.ResumeProto);
         backend.DeleteData(lobby, LobbyKeys.ResumeKey);
         backend.DeleteData(lobby, LobbyKeys.ResumeHost);
+        backend.DeleteData(lobby, Guests);
     }
 
     public static LobbyQuery Query(string runKey, string version) => new(

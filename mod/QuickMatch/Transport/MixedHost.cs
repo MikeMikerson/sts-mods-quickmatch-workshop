@@ -27,6 +27,7 @@ internal sealed class MixedHost : AbstractTestNetHost, INetHostHandler, IChatHos
     private readonly SteamHost _sockets;
     private readonly ChatHostCore _chat;
     private readonly MixedRoutes _routes;
+    private readonly HashSet<ulong> _moddedSockets = new();
     private SocketVoiceControl? _voiceControl;
     private readonly bool _runVoice;
     private bool _stopping;
@@ -50,7 +51,17 @@ internal sealed class MixedHost : AbstractTestNetHost, INetHostHandler, IChatHos
 
     public override IEnumerable<ulong> ConnectedPeerIds => _routes.Peers;
 
-    public bool PeerOffersSockets(ulong peer) => _sockets.ConnectedPeerIds.Contains(peer) || _chat.PeerOffersSockets(peer);
+    public bool UsesSockets(ulong peer) => !_routes.IsChatPeer(peer) && _sockets.ConnectedPeerIds.Contains(peer);
+
+    public bool PeerOffersSockets(ulong peer) => UsesSockets(peer) || _chat.PeerOffersSockets(peer);
+
+    public void AdmitQuickMatchPeer(ulong peer)
+    {
+        if (UsesSockets(peer) && _moddedSockets.Add(peer))
+        {
+            _voiceControl?.AddPeer(peer);
+        }
+    }
 
     /// <summary>True while any client is on lobby chat (a phone, or a desktop player who came that way).</summary>
     public bool HasChatPeers => _chat.Peers.Any();
@@ -155,13 +166,13 @@ internal sealed class MixedHost : AbstractTestNetHost, INetHostHandler, IChatHos
 
     void INetHostHandler.OnPeerConnected(ulong peerId)
     {
-        _voiceControl?.AddPeer(peerId);
         MainFile.Logger.Info($"sockets host: client {peerId} connected");
         _handler.OnPeerConnected(peerId);
     }
 
     void INetHostHandler.OnPeerDisconnected(ulong peerId, NetErrorInfo info)
     {
+        _moddedSockets.Remove(peerId);
         _voiceControl?.RemovePeer(peerId);
         MainFile.Logger.Info($"sockets host: client {peerId} disconnected ({info.GetReason()})");
         _handler.OnPeerDisconnected(peerId, info);
@@ -192,8 +203,8 @@ internal sealed class MixedHost : AbstractTestNetHost, INetHostHandler, IChatHos
     {
         if (_voiceControl == null && _runVoice && Features.IsOn(GameFeature.Voice) && LobbyId is { } lobby)
         {
-            _voiceControl = new SocketVoiceControl(lobby, 0, id => _sockets.ConnectedPeerIds.Contains(id), _chat.Route);
-            foreach (ulong id in _sockets.ConnectedPeerIds)
+            _voiceControl = new SocketVoiceControl(lobby, 0, _moddedSockets.Contains, _chat.Route);
+            foreach (ulong id in _moddedSockets)
             {
                 _voiceControl.AddPeer(id);
             }

@@ -20,9 +20,7 @@ using QuickMatch.Matchmaking;
 namespace QuickMatch.Patches;
 
 // A quick-match run goes on without a player who dropped. Each patch hands over to
-// QuickMatch.Matchmaking.StandIn, which does nothing outside a quick-match run, except the two scaling
-// patches, which count the fight's players instead of the run's: the same number in any run where everyone is
-// in every fight.
+// QuickMatch.Matchmaking.StandIn, which acts only in runs that use Quick Match recovery.
 [PatchFeature(GameFeature.StandIn)]
 public static class DropPatches
 {
@@ -157,7 +155,7 @@ public static class DropPatches
         public static void Postfix(ref decimal __result, Creature target)
         {
             // The game returns 1 for block it does not scale, and the run's count (2 or more) for block it does.
-            if (__result != 1m && target?.CombatState is { } combat)
+            if (Regroup.UsesQuickMatchRecovery && __result != 1m && target?.CombatState is { } combat)
             {
                 __result = DropPolicy.BlockScale(combat.Players.Count,
                     MultiplayerScalingModel.GetMultiplayerScaling(combat.Encounter, combat.RunState.CurrentActIndex));
@@ -171,7 +169,7 @@ public static class DropPatches
     {
         public static void Postfix(PlatingPower __instance)
         {
-            if (__instance.Owner.Side == CombatSide.Enemy && __instance.Owner.CombatState is { } combat)
+            if (Regroup.UsesQuickMatchRecovery && __instance.Owner.Side == CombatSide.Enemy && __instance.Owner.CombatState is { } combat)
             {
                 __instance.DynamicVars["Decrement"].BaseValue = combat.Players.Count;
             }

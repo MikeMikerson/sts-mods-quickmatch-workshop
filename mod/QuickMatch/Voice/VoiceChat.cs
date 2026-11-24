@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using MegaCrit.Sts2.Core.Multiplayer.Game.Lobby;
 using QuickMatch.Lobby;
 using QuickMatch.Matchmaking;
 using QuickMatch.Patches;
@@ -20,6 +21,26 @@ internal static class VoiceChat
     private const long MatchGoneMs = 1500;
 
     private static VoiceSession? _session;
+    private static WeakReference<LoadRunLobby>? _savedLobby;
+    private static ulong? _savedLobbyId;
+
+    public static void FollowSavedLobby(LoadRunLobby lobby)
+    {
+        _savedLobbyId = lobby.NetService is QuickMatchHostService or QuickMatchClientService
+            ? LobbyLinks.ParseLobbyId(lobby.NetService.GetRawLobbyIdentifier()) : null;
+        _savedLobby = _savedLobbyId.HasValue ? new(lobby) : null;
+    }
+
+    internal static bool CanExchangeVoice(ulong lobbyId, ulong player)
+    {
+        if (LobbyGuard.Active)
+        {
+            return LobbyGuard.IsQuickMatchPeer(player);
+        }
+        return _savedLobbyId == lobbyId && _savedLobby != null && _savedLobby.TryGetTarget(out var lobby)
+            && lobby.NetService.IsConnected && lobby.PlayerIds.Contains(player)
+            && RunRecord.Current?.IsQuickMatchPlayer(player) == true;
+    }
 #if !IPHONE
     private static SteamVoiceRoom? _steam;
     private static SteamVoiceDecoder? _decoder;
@@ -120,8 +141,10 @@ internal static class VoiceChat
             return;
         }
         Apply(VoiceStore.Settings, _session);
+        IReadOnlyList<ulong> inLobby = LobbyBackend.Current.Members(lobby);
+        _roster.Update(lobby, LocalId, inLobby, inLobby, peer => CanExchangeVoice(lobby, peer));
+        _steam.Members = _roster.VoiceMembers;
         _session.SetMembers(_steam.Members);
-        _roster.Update(lobby, LocalId, LobbyBackend.Current.Members(lobby), _session.Members);
         _steam.Receive(_session.Receive);
         _session.Update(now);
     }
@@ -145,6 +168,10 @@ internal static class VoiceChat
             }
             else
             {
+#if !IPHONE
+                _steam?.Dispose();
+                _steam = null;
+#endif
                 _session.SwitchLink(_relay);
                 MainFile.Logger.Info("voice: switched to Opus over the relay");
             }
@@ -156,8 +183,9 @@ internal static class VoiceChat
         if (_session is { } session)
         {
             Apply(VoiceStore.Settings, session);
-            session.SetMembers(route?.VoiceMembers ?? Array.Empty<ulong>());
-            _roster.Update(lobby, LocalId, LobbyBackend.Current.Members(lobby), session.Members);
+            _roster.Update(lobby, LocalId, LobbyBackend.Current.Members(lobby),
+                route?.VoiceMembers ?? Array.Empty<ulong>(), peer => CanExchangeVoice(lobby, peer));
+            session.SetMembers(_roster.VoiceMembers);
             session.Update(now);
         }
     }

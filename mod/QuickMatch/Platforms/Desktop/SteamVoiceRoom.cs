@@ -22,20 +22,15 @@ internal sealed class SteamVoiceRoom : IVoiceLink, IDisposable
     // "QM".
     public const int Channel = 0x514D;
 
-    private const long MembersEveryMs = 1000;
-
     private const int ReceiveBatch = 32;
 
     private static readonly int SendFlags =
         Constants.k_nSteamNetworkingSend_UnreliableNoNagle | Constants.k_nSteamNetworkingSend_AutoRestartBrokenSession;
 
-    private readonly ulong _local;
     private readonly IntPtr[] _received = new IntPtr[ReceiveBatch];
     private readonly byte[] _buffer = new byte[SteamVoiceWire.MaxBytes];
     private Callback<SteamNetworkingMessagesSessionRequest_t>? _sessionRequest;
     private Callback<SteamNetworkingMessagesSessionFailed_t>? _sessionFailed;
-    private ulong[] _members = [];
-    private long _membersAt = long.MinValue;
     private bool _reportedSendFailure;
     private int _malformed;
     private bool _disposed;
@@ -43,7 +38,6 @@ internal sealed class SteamVoiceRoom : IVoiceLink, IDisposable
     private SteamVoiceRoom(ulong lobby)
     {
         Lobby = lobby;
-        _local = LobbyBackend.Current.LocalId;
         _sessionRequest = Callback<SteamNetworkingMessagesSessionRequest_t>.Create(OnSessionRequest);
         _sessionFailed = Callback<SteamNetworkingMessagesSessionFailed_t>.Create(OnSessionFailed);
     }
@@ -60,29 +54,7 @@ internal sealed class SteamVoiceRoom : IVoiceLink, IDisposable
 
     public ulong Lobby { get; }
 
-    public IReadOnlyCollection<ulong> Members
-    {
-        get
-        {
-            long now = Environment.TickCount64;
-            // The first read is due at once: _membersAt starts at long.MinValue, where now - _membersAt overflows to a
-            // negative number and the interval alone would never come due.
-            if (_membersAt == long.MinValue || now - _membersAt >= MembersEveryMs)
-            {
-                _membersAt = now;
-                try
-                {
-                    _members = LobbyBackend.Current.Members(Lobby).Where(m => m != _local && m != 0).Distinct().ToArray();
-                }
-                catch (Exception e)
-                {
-                    MainFile.Logger.Warn($"voice: could not read the lobby's members: {e.Message}");
-                    _members = [];
-                }
-            }
-            return _members;
-        }
-    }
+    public IReadOnlyCollection<ulong> Members { get; set; } = [];
 
     public bool IsUp => !_disposed && SteamInitializer.Initialized && Members.Count > 0;
 
@@ -174,10 +146,10 @@ internal sealed class SteamVoiceRoom : IVoiceLink, IDisposable
         _sessionFailed = null;
         if (SteamInitializer.Initialized)
         {
-            foreach (ulong member in _members)
+            foreach (ulong member in Members)
             {
                 SteamNetworkingIdentity peer = Identity(member);
-                SteamNetworkingMessages.CloseSessionWithUser(ref peer);
+                SteamNetworkingMessages.CloseChannelWithUser(ref peer, Channel);
             }
         }
         MainFile.Logger.Info($"voice: over Steam closed in lobby {Lobby}");
@@ -190,9 +162,7 @@ internal sealed class SteamVoiceRoom : IVoiceLink, IDisposable
             return;
         }
         ulong from = request.m_identityRemote.GetSteamID64();
-        // A fresh read, so a player who has just joined is not turned away by the cached list.
-        _membersAt = long.MinValue;
-        if (!Members.Contains(from))
+        if (!VoiceChat.CanExchangeVoice(Lobby, from) || !LobbyBackend.Current.Members(Lobby).Contains(from))
         {
             MainFile.Logger.Info($"voice: ignored a Steam session request from {from}, not in lobby {Lobby}");
             return;

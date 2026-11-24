@@ -30,6 +30,7 @@
     <Compile Include="../QuickMatch/Matchmaking/JoinLeaveRecord.cs" Link="JoinLeaveRecord.cs" />
     <Compile Include="../QuickMatch/Matchmaking/DropPolicy.cs" Link="DropPolicy.cs" />
     <Compile Include="../QuickMatch/Matchmaking/RejoinPolicy.cs" Link="RejoinPolicy.cs" />
+    <Compile Include="../QuickMatch/Matchmaking/RunRecord.Data.cs" Link="RunRecord.Data.cs" />
     <Compile Include="../QuickMatch/Matchmaking/MigrationPolicy.cs" Link="MigrationPolicy.cs" />
     <!-- The lobby keys, the voice choice they carry, and what a lobby's host takes. -->
     <Compile Include="../QuickMatch/Steam/LobbyKeys.cs" Link="Transport/LobbyKeys.cs" />

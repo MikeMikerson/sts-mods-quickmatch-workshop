@@ -26,7 +26,7 @@ internal sealed class ChatHostCore : IChatLinkEvents
     /// Version of the connection protocol; a client with another one is rejected. It moves whenever a release cannot play
     /// with the one before, like the lobby keys' protocol numbers (LobbyKeys).
     /// </summary>
-    public const ushort Protocol = 19;
+    public const ushort Protocol = 20;
     public const ushort HelloOffersSockets = 1 << 15;
 
     /// <summary>A member who leaves without a Bye is dropped after this long, in case the Bye is on its way.</summary>

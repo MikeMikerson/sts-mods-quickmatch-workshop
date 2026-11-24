@@ -9,6 +9,7 @@ using MegaCrit.Sts2.Core.Multiplayer.Game.Lobby;
 using MegaCrit.Sts2.Core.Saves;
 using QuickMatch.Localization;
 using QuickMatch.Lobby;
+using QuickMatch.Transport;
 using QuickMatch.Ui;
 
 namespace QuickMatch.Matchmaking;
@@ -82,6 +83,11 @@ internal static partial class Matchmaker
         }
         LobbyGuard.NoteHostCaused(player);
         MainFile.Logger.Info($"lobby {SteamLobbyId}: sending a player away ({reason})");
+        if (host is QuickMatchHostService service && service.IsGuest(player))
+        {
+            host.DisconnectClient(player, NetError.Kicked);
+            return;
+        }
         host.SendMessage(new QuickMatchLeaveMessage { reason = why }, player);
         _ = DisconnectIfStillHereAsync(host, player, _generation, Lobby);
     }

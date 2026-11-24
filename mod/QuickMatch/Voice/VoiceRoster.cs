@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -20,7 +21,9 @@ internal sealed class VoiceRoster
     private readonly HashSet<ulong> _onVoice = new();
     private ulong _lobby;
 
-    public void Update(ulong lobby, ulong local, IEnumerable<ulong> inLobby, IEnumerable<ulong> onVoice)
+    public IReadOnlyCollection<ulong> VoiceMembers => _onVoice;
+
+    public void Update(ulong lobby, ulong local, IEnumerable<ulong> inLobby, IEnumerable<ulong> onVoice, Func<ulong, bool> isQuickMatchPeer)
     {
         if (lobby != _lobby)
         {
@@ -28,7 +31,7 @@ internal sealed class VoiceRoster
             _seen.Clear();
         }
         _onVoice.Clear();
-        _onVoice.UnionWith(onVoice.Where(id => id != local));
+        _onVoice.UnionWith(onVoice.Where(id => id != local && isQuickMatchPeer(id)));
         _present.Clear();
         _present.UnionWith(inLobby.Where(id => id != local));
         _present.UnionWith(_onVoice);

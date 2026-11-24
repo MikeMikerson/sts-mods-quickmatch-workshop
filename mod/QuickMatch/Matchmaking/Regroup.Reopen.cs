@@ -28,6 +28,14 @@ internal static partial class Regroup
         try
         {
             await MainMenuAsync();
+            if (RunRecord.Current is { HasGuests: true } guestRun)
+            {
+                if (guestRun.IsHost)
+                {
+                    await HostSavedRunAsync(run, key);
+                }
+                return;
+            }
             QuickMatchHub.OpenForRejoin();
             if (!QuickMatchHub.IsOnTop())
             {
@@ -150,7 +158,8 @@ internal static partial class Regroup
             return;
         }
         MainFile.Logger.Info($"reopening quick-match run {key} {MatchVoice.Text(MatchVoice.On)}");
-        var netService = new QuickMatchHostService();
+        ulong[] guests = RunRecord.Current?.GuestPlayers ?? [];
+        var netService = new QuickMatchHostService(guests.Contains);
         NetErrorInfo? error = await netService.StartQuickMatchHost(4, runVoice);
         if (error.HasValue)
         {
@@ -169,6 +178,12 @@ internal static partial class Regroup
         }
         NMultiplayerLoadGameScreen screen = stack.GetSubmenuType<NMultiplayerLoadGameScreen>();
         screen.InitializeAsHost(netService, run);
+        if (guests.Length > 0)
+        {
+            LobbyBackend.Current.SetData(lobby, ResumeLobby.Guests, string.Join(",", guests));
+            LobbyBackend.Current.SetData(lobby, LobbyKeys.Voice, MatchVoice.LobbyValue(runVoice));
+            SavedInviteButton.Add(screen, lobby, netService.NetId);
+        }
         stack.Push(screen);
         QuickMatchLobby.PublishResume(lobby, key);
     }
@@ -183,7 +198,7 @@ internal static partial class Regroup
         try
         {
             int connecting = ConnectingPlayers?.GetValue(lobby) is System.Collections.ICollection list ? list.Count : 1;
-            bool ourRun = RunRecord.Current is { } record && RunRecord.KeyOf(lobby.Run) == record.Key
+            bool ourRun = RunRecord.Current is { HasGuests: false } record && RunRecord.KeyOf(lobby.Run) == record.Key
                 && StartScreens.FromGame(lobby.Run.GameMode, GameVersions.IsCustom(lobby.Run)) != null;
             bool allReady = true;
             foreach (LoadRunLobbyPlayer player in lobby.Players)
@@ -204,7 +219,7 @@ internal static partial class Regroup
     {
         try
         {
-            return RunRecord.Current is { } record && RunRecord.KeyOf(lobby.Run) == record.Key
+            return RunRecord.Current is { HasGuests: false } record && RunRecord.KeyOf(lobby.Run) == record.Key
                 && RunKickPolicy.OnlyRemovedMissing(lobby.Run.Players.Select(p => p.NetId), lobby.PlayerIds.ToHashSet(), record.Banned);
         }
         catch (Exception e)

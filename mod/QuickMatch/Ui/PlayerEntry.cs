@@ -102,8 +102,10 @@ internal sealed class PlayerStrip
         {
             return;
         }
-        VoiceSession? session = voice ? VoiceChat.Session : null;
-        string status = session != null ? VoiceText.StatusOf(session, _player)
+        bool guest = LobbyGuard.IsGuest(_player);
+        VoiceSession? session = voice && !guest ? VoiceChat.Session : null;
+        string status = guest ? Loc.Get("QUICKMATCH.PLAYER.guest_label")
+            : session != null ? VoiceText.StatusOf(session, _player)
             : BlockStore.List.Contains(_player) ? Loc.Get("QUICKMATCH.BLOCK.blocked") : "";
         if (_status.Text != status)
         {

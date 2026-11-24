@@ -19,8 +19,8 @@ public enum VoteOutcome
 
 // A vote to remove a client from a quick-match lobby. Every player of the lobby keeps one and feeds it the same votes
 // (lobby chat, whose sender Steam stamps, so nobody can vote in another player's name); the host carries it out. A
-// majority of the other players present when it starts must vote Yes: 1 of 1 with 2 players, 2 of 2 with 3, 2 of 3 with
-// 4. Starting a vote is a Yes; a vote lasts 30 seconds; no answer, and a voter who leaves, count as No. Only clients
+// majority of the other QuickMatch players present when it starts must vote Yes. Guests can be targets.
+// Starting a vote is a Yes; a vote lasts 30 seconds; no answer, and a voter who leaves, count as No. Only clients
 // can be voted out (the host carries the removal out). Each player can start one vote in 2 minutes, a failed vote
 // against a player cannot start again for 5 minutes, and one vote runs at a time. Times are in seconds on the caller's
 // own clock.
@@ -31,6 +31,8 @@ public enum VoteOutcome
 // No result ResultWaitSeconds after the vote's time is a failed vote.
 public sealed class KickVote
 {
+    public Func<ulong, bool> IsVoter { private get; init; } = _ => true;
+
     public const double VoteSeconds = 30;
     public const double StartEverySeconds = 120;
     public const double RetrySameSeconds = 300;
@@ -80,7 +82,7 @@ public sealed class KickVote
         {
             return false;
         }
-        if (!members.Contains(starter) || !members.Contains(target))
+        if (!IsVoter(starter) || !members.Contains(starter) || !members.Contains(target))
         {
             return false;
         }
@@ -110,7 +112,7 @@ public sealed class KickVote
             _voters.Clear();
             _yes.Clear();
             _no.Clear();
-            foreach (ulong member in members.Where(m => m != target && m != 0))
+            foreach (ulong member in members.Where(m => m != target && m != 0 && IsVoter(m)))
             {
                 _voters.Add(member);
             }

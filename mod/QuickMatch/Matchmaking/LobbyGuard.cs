@@ -29,7 +29,7 @@ internal static partial class LobbyGuard
     private const double HostRemovesSeconds = 8;
     private const double ResultSeconds = 8;
 
-    private static readonly KickVote Vote = new();
+    private static readonly KickVote Vote = new() { IsVoter = IsQuickMatchPeer };
     private static readonly ConcurrentQueue<(ulong Sender, byte[] Data)> Inbox = new();
     // As host: when each client joined this lobby, in Unix seconds.
     private static readonly Dictionary<ulong, long> JoinedAt = new();
@@ -45,6 +45,13 @@ internal static partial class LobbyGuard
     private static (ulong Target, bool Passed, double At)? _result;
 
     public static bool Active => _lobby != 0;
+
+    public static bool IsGuest(ulong player) => Regroup.InQuickMatchRun
+        ? RunRecord.Current?.GuestPlayers?.Contains(player) == true : Matchmaker.GuestPlayers.Contains(player);
+
+    public static bool IsQuickMatchPeer(ulong player) => _inRun
+        ? RunRecord.Current?.IsQuickMatchPlayer(player) == true && RunManager.Instance.RunLobby?.PlayerIds.Contains(player) == true
+        : Matchmaker.IsQuickMatchPeer(player);
 
     public static void Begin(ulong steamLobbyId)
     {

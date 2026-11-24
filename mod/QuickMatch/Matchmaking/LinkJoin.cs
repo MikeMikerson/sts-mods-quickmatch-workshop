@@ -19,6 +19,7 @@ namespace QuickMatch.Matchmaking;
 // lobby through the game's.
 internal static class LinkJoin
 {
+    private static readonly string[] InviteKeys = [.. LinkPolicy.Keys, ResumeLobby.Guests, LobbyKeys.ResumeProto, LobbyKeys.ResumeKey];
     private static readonly TimeSpan ReadTimeout = TimeSpan.FromSeconds(10);
 
     public static async Task RouteAsync(ulong lobbyId, ulong? playerId, Func<Task> gameJoin)
@@ -28,21 +29,25 @@ internal static class LinkJoin
         {
             try
             {
-                data = await LobbyBackend.Current.ReadDataAsync(lobbyId, LinkPolicy.Keys, timeout.Token);
+                data = await LobbyBackend.Current.ReadDataAsync(lobbyId, InviteKeys, timeout.Token);
             }
             catch (OperationCanceledException)
             {
                 data = null;
             }
         }
-        if (data == null || !LinkPolicy.IsQuickMatch(data))
+        bool guestSave = data != null && !string.IsNullOrEmpty(data.GetValueOrDefault(ResumeLobby.Guests));
+        if (data == null || !guestSave && !LinkPolicy.IsQuickMatch(data))
         {
             MainFile.Logger.Info($"invite to lobby {lobbyId}: {(data == null ? "no lobby data from Steam" : "not a quick-match lobby")}, joining as the game does");
             await gameJoin();
             return;
         }
         QuickMatchLobby.CompatKey local = QuickMatchLobby.CompatKey.Local();
-        (LinkVerdict verdict, LinkLobby lobby) = LinkPolicy.Read(data, (local.Version, local.Db, local.Mods), StartScreens.IsPlayable, MatchChoice.MaxAscensionFor, MatchChoice.Voice);
+        (LinkVerdict verdict, LinkLobby lobby) = guestSave
+            ? (data.GetValueOrDefault(LobbyKeys.ResumeProto) != LobbyKeys.ResumeProtoValue ? LinkVerdict.OtherRelease
+                : data.GetValueOrDefault(LobbyKeys.Version) != local.Version ? LinkVerdict.OtherGame : LinkVerdict.Join, default)
+            : LinkPolicy.Read(data, (local.Version, local.Db, local.Mods), StartScreens.IsPlayable, MatchChoice.MaxAscensionFor, MatchChoice.Voice);
         MainFile.Logger.Info($"invite to quick-match lobby {lobbyId}: {verdict}");
         if (verdict != LinkVerdict.Join)
         {
@@ -66,8 +71,16 @@ internal static class LinkJoin
         {
             game.MainMenu.SubmenuStack.Pop();
         }
-        QuickMatchHub.Open();
-        Matchmaker.StartLink(lobbyId, lobby);
+        if (guestSave)
+        {
+            QuickMatchHub.OpenForRejoin();
+            Matchmaker.StartGuestSaveLink(lobbyId, data.GetValueOrDefault(LobbyKeys.ResumeKey) ?? "", data.GetValueOrDefault(LobbyKeys.Voice) == LobbyKeys.VoiceOn);
+        }
+        else
+        {
+            QuickMatchHub.Open();
+            Matchmaker.StartLink(lobbyId, lobby);
+        }
     }
 
     // The game's own question before an invite takes a player out of a run.

@@ -2,6 +2,7 @@ using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Audio.Debug;
 using MegaCrit.Sts2.Core.Entities.Players;
+using MegaCrit.Sts2.Core.Multiplayer.Game.Lobby;
 using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.Multiplayer;
 using MegaCrit.Sts2.Core.Nodes.Screens.PauseMenu;
@@ -18,6 +19,12 @@ namespace QuickMatch.Patches;
 [PatchFeature(GameFeature.Voice)]
 public static class VoicePatches
 {
+    [HarmonyPatch(typeof(NRemoteLoadLobbyPlayerContainer), nameof(NRemoteLoadLobbyPlayerContainer.Initialize))]
+    public static class SavedLobby
+    {
+        public static void Postfix(LoadRunLobby runLobby) => VoiceChat.FollowSavedLobby(runLobby);
+    }
+
     // Every change of the game's Master Volume goes through here (the slider, the game's start, the fade when
     // muted in the background); while voice plays it is moved off the bus voice uses.
     [HarmonyPatch(typeof(NDebugAudioManager), nameof(NDebugAudioManager.SetMasterAudioVolume))]

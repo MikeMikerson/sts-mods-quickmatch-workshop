@@ -123,7 +123,7 @@ internal static partial class Matchmaker
         {
             connection = ChatConnectionInitializer.FromLobby(lobbyId);
         }
-        var service = new NetClientGameService(PeerVersionInfo.LocalDefault());
+        var service = new QuickMatchClientService();
         RejoinClient? watcher = rejoin ? new RejoinClient(service) : null;
         JoinFlow flow = GameVersions.NewJoinFlow(service, connection);
         _flow = flow;

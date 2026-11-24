@@ -127,7 +127,7 @@ internal static partial class Matchmaker
             }
             bool visible = found.Any(c => c.Id == SteamLobbyId);
             MainFile.Logger.Info($"merge check: own lobby {(visible ? "is" : "is not")} visible in search");
-            if (SettledGroupSize() != group)
+            if (SettledGroupSize() != group || _ask != null || group >= StartSize)
             {
                 continue;
             }
@@ -156,8 +156,9 @@ internal static partial class Matchmaker
             ulong targetId = target.Value.Id;
             MainFile.Logger.Info($"merge: moving group of {group} from lobby {SteamLobbyId} (t={_createdAt}) to {targetId} (n={target.Value.Members}/{target.Value.Size}{(target.Value.AnySize ? " any size" : "")} t={target.Value.CreatedAt})");
             SetState(MatchState.Merging, $"to {targetId}");
-            if (group > 1 && Lobby?.NetService is NetHostGameService host)
+            if (group > 1 && Lobby?.NetService is QuickMatchHostService host)
             {
+                host.CloseGuestAdmission();
                 LobbyGuard.NoteMovingEveryone();
                 host.SendMessage(new QuickMatchMoveMessage
                 {
@@ -268,12 +269,8 @@ internal static partial class Matchmaker
         {
             return 0;
         }
-        int players = Lobby.Players.Count;
-        if (host.ConnectedPeers.Count != players - 1)
-        {
-            return 0;
-        }
-        return LobbyBackend.Current.Members(SteamLobbyId).Count <= players ? players : 0;
+        return MatchPolicy.SettledQuickMatchGroup(Lobby.Players.Select(p => p.id).ToArray(), host.NetId,
+            host.ConnectedPeers.Select(p => p.peerId), LobbyBackend.Current.Members(SteamLobbyId), GuestPlayers);
     }
 
     private static async Task RestoreCharacterAsync(NSubmenu screen, CharacterModel character, bool ready, int gen)

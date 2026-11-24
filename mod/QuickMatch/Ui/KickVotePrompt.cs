@@ -70,12 +70,17 @@ internal static class KickVotePrompt
             child.QueueFree();
         }
         string name = BlockPlayers.NameOf(view.Target);
+        bool endsRun = view.InRun && RunRecord.Current is { HasGuests: true } record && record.HostId == view.Target;
         // One line for what is said beside the buttons (the count while asking, the result after), so the strip stays low.
         var line = new HBoxContainer();
         line.AddThemeConstantOverride("separation", 16);
         if (view.Passed is { } passed)
         {
             string said = !passed ? "QUICKMATCH.VOTE.failed" : view.InRun ? "QUICKMATCH.VOTE.passed_run" : "QUICKMATCH.VOTE.passed";
+            if (passed && endsRun)
+            {
+                said = "QUICKMATCH.VOTE.passed_guest_run_host";
+            }
             line.AddChild(GameLook.Label(Loc.With(said, "player", name), 26, passed ? GameLook.Gold : GameLook.Cream, wrap: true));
             if (passed && !BlockStore.List.Contains(view.Target))
             {
@@ -86,7 +91,9 @@ internal static class KickVotePrompt
         }
         else
         {
-            body.AddChild(GameLook.Label(Loc.With(view.InRun ? "QUICKMATCH.VOTE.ask_run" : "QUICKMATCH.VOTE.ask", "player", name), 28, GameLook.Cream, wrap: true));
+            string question = endsRun ? "QUICKMATCH.VOTE.ask_guest_run_host"
+                : view.InRun ? "QUICKMATCH.VOTE.ask_run" : "QUICKMATCH.VOTE.ask";
+            body.AddChild(GameLook.Label(Loc.With(question, "player", name), 28, GameLook.Cream, wrap: true));
             string count = Loc.With("QUICKMATCH.VOTE.count", "yes", view.Yes.ToString(CultureInfo.InvariantCulture), "needed", view.Needed.ToString(CultureInfo.InvariantCulture));
             string time = Loc.With("QUICKMATCH.VOTE.time", "seconds", ((int)Math.Ceiling(view.SecondsLeft)).ToString(CultureInfo.InvariantCulture));
             MegaLabel counted = GameLook.Label($"{count}   {time}", 22, GameLook.Faint);

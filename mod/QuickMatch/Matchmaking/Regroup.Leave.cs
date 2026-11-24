@@ -14,8 +14,7 @@ namespace QuickMatch.Matchmaking;
 
 internal static partial class Regroup
 {
-    // The run record is forgotten, so there is no rejoin. A host saves and quits (the save stays, for Load by
-    // hand); a client disconnects, which the game itself turns into a return to the menu.
+    // A guest run stays with its original host, including the blocks on its save.
     public static void LeaveRunAfterBlocking()
     {
         if (!InQuickMatchRun)
@@ -23,25 +22,33 @@ internal static partial class Regroup
             return;
         }
         MainFile.Logger.Info("leaving the run after blocking a player in it");
-        RunRecord.Clear("left the run after blocking a player");
+        if (RunRecord.Current is not { IsHost: true, HasGuests: true })
+        {
+            RunRecord.Clear("left the run after blocking a player");
+        }
         InQuickMatchRun = false;
         _ = LeaveRunAsync();
     }
 
-    // The run record is forgotten, so there is no Rejoin. A client disconnects at once. A host saves and quits a
-    // moment later (the voters wait for it, and carry on under a new host when it goes), and moves its save of
-    // the run aside so its Load does not reopen it.
+    // A host that can be replaced moves the old save aside. A guest run has just one copy, on its host.
     public static void LeaveRunVotedOut(bool asHost)
     {
         if (!InQuickMatchRun)
         {
             return;
         }
-        string? key = RunRecord.Current?.Key;
+        string? key = UsesQuickMatchRecovery ? RunRecord.Current?.Key : null;
         MainFile.Logger.Info($"voted out of the run{(asHost ? " as its host" : "")}; leaving it");
         // The line stays up over the return to the menu.
         Notice.Show(Loc.Get("QUICKMATCH.NOTICE.voted_out_run"), 10);
-        RunRecord.Clear("voted out of the run");
+        if (asHost && !UsesQuickMatchRecovery)
+        {
+            RunRecord.Ban(RunRecord.LocalPlayerId());
+        }
+        else
+        {
+            RunRecord.Clear("voted out of the run");
+        }
         InQuickMatchRun = false;
         if (!asHost)
         {
@@ -73,7 +80,7 @@ internal static partial class Regroup
         }
     }
 
-    // Our own disconnect then goes to the migration as a lost host's does, among the voters, the host banned.
+    // Record the departed host before disconnecting when the other players can take over.
     public static void LeaveHostVotedOut(ulong host)
     {
         RunManager run = RunManager.Instance;
@@ -81,8 +88,11 @@ internal static partial class Regroup
         {
             return;
         }
-        MainFile.Logger.Info("the host was voted out of the run; leaving it to carry on under a new host");
-        _leavingVotedHost = host;
+        MainFile.Logger.Info("leaving the host who was voted out of the run");
+        if (UsesQuickMatchRecovery)
+        {
+            _leavingVotedHost = host;
+        }
         run.NetService.Disconnect(NetError.Quit);
     }
 

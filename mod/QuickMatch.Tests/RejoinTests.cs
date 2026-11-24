@@ -1,5 +1,7 @@
 using System.Reflection;
+using System.Text.Json;
 using QuickMatch.Matchmaking;
+using QuickMatch.Steam;
 using Xunit;
 
 namespace QuickMatch.Tests;
@@ -60,6 +62,47 @@ public class RejoinTests
         Assert.False(RejoinPolicy.AcceptsAnswer("k", "other", [1, 2], local: 2));
         Assert.False(RejoinPolicy.AcceptsAnswer("k", "k", [1, 3], local: 2));
         Assert.False(RejoinPolicy.AcceptsAnswer(null, null, [2], local: 2));
+    }
+
+    [Fact]
+    public void SavedGuestsRemainGuestsEvenWhenSomeHaveNotReturned()
+    {
+        Assert.Equal([3UL, 4UL], Assert.IsType<ulong[]>(ResumeLobby.ReadGuests("3,4", [1, 2, 3, 4], host: 1)));
+    }
+
+    [Fact]
+    public void ReloadingPreservesGuestRolesAndRemovals()
+    {
+        var before = new RunRecord("run", 1, [1, 2, 3], 3, 1000, Removed: [3], GuestPlayers: [3]);
+        string json = JsonSerializer.Serialize(before, RunRecordJson.Default.RunRecord);
+        var saved = JsonSerializer.Deserialize(json, RunRecordJson.Default.RunRecord)!;
+
+        Assert.True(saved.HasGuests);
+        Assert.True(saved.IsQuickMatchPlayer(2));
+        Assert.False(saved.IsQuickMatchPlayer(3));
+        Assert.False(saved.IsQuickMatchPlayer(4));
+        Assert.Contains(3UL, saved.Banned);
+    }
+
+    [Fact]
+    public void AnOlderSaveKeepsFullQuickMatchRecovery()
+    {
+        const string json = """{"Key":"run","HostId":1,"PlayerIds":[1,2],"Size":2,"StartedAt":1000}""";
+        var saved = JsonSerializer.Deserialize(json, RunRecordJson.Default.RunRecord)!;
+        Assert.False(saved.HasGuests);
+        Assert.True(saved.IsQuickMatchPlayer(2));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("1")]
+    [InlineData("2,2")]
+    [InlineData("2,5")]
+    [InlineData("2,0")]
+    [InlineData("2,x")]
+    public void InvalidGuestListCannotEnableQuickMatchRecovery(string data)
+    {
+        Assert.Null(ResumeLobby.ReadGuests(data, [1, 2, 3, 4], host: 1));
     }
 
     [Fact]

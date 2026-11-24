@@ -29,7 +29,7 @@ internal static class HostCopy
     public static void OnSave(AbstractRoom? preFinishedRoom)
     {
         RunManager run = RunManager.Instance;
-        if (!Regroup.InQuickMatchRun || !run.ShouldSave || run.NetService.Type != NetGameType.Client || RunRecord.Current == null)
+        if (!Regroup.UsesQuickMatchRecovery || !run.ShouldSave || run.NetService.Type != NetGameType.Client || RunRecord.Current == null)
         {
             return;
         }
@@ -47,7 +47,7 @@ internal static class HostCopy
     // the host's rejoin answer), so it holds a current copy from the first moment of the run.
     public static void OnSavedRunSetUp(LoadRunLobby lobby)
     {
-        if (lobby.NetService.Type != NetGameType.Client || RunRecord.Current is not { } record || RunRecord.KeyOf(lobby.Run) != record.Key)
+        if (lobby.NetService.Type != NetGameType.Client || RunRecord.Current is not { HasGuests: false } record || RunRecord.KeyOf(lobby.Run) != record.Key)
         {
             return;
         }

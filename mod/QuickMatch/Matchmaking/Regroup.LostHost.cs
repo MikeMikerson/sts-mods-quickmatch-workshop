@@ -18,7 +18,7 @@ internal static partial class Regroup
     {
         ulong votedHost = _leavingVotedHost;
         _leavingVotedHost = 0;
-        if (!InQuickMatchRun || RunRecord.Current == null || info.GetReason() == NetError.HostAbandoned || (info.SelfInitiated && votedHost == 0))
+        if (!UsesQuickMatchRecovery || RunRecord.Current == null || info.GetReason() == NetError.HostAbandoned || (info.SelfInitiated && votedHost == 0))
         {
             return null;
         }

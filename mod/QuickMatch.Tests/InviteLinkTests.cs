@@ -33,28 +33,18 @@ public class InviteLinkTests
     }
 
     [Theory]
-    [InlineData(new[] { "QuickMatch-v0.28.0" }, true)]
-    [InlineData(new[] { "BetterMaps-v1.0", "QuickMatch-v0.27.4" }, true)]
-    [InlineData(new[] { "QuickMatchPlus-v1.0" }, false)]
-    [InlineData(new[] { "BetterMaps-v1.0" }, false)]
-    [InlineData(new string[0], false)]
-    public void AJoinerWithoutQuickMatchIsTurnedAway(string[] mods, bool letIn)
+    [InlineData(null, null, true, nameof(PeerAdmission.Guest))]
+    [InlineData("BetterMaps-v1", "QuickMatchPlus-v1", true, nameof(PeerAdmission.Guest))]
+    [InlineData(null, null, false, nameof(PeerAdmission.GuestsUnavailable))]
+    [InlineData("QuickMatch-v1", null, true, nameof(PeerAdmission.QuickMatch))]
+    [InlineData(null, "QuickMatch-v1", false, nameof(PeerAdmission.QuickMatch))]
+    [InlineData("QuickMatch-v2", null, true, nameof(PeerAdmission.OtherRelease))]
+    [InlineData(null, "QuickMatch-v2", false, nameof(PeerAdmission.OtherRelease))]
+    public void TheHandshakeAdmitsGuestsOnlyOnAnOpenSocketRoute(string? otherMod, string? gameplayMod, bool acceptsSocketGuest, string expected)
     {
-        Assert.Equal(letIn, LinkPolicy.HasQuickMatch(mods, "QuickMatch"));
-    }
-
-    [Fact]
-    public void AnUnmoddedJoinerSendsNoModListAndIsTurnedAway()
-    {
-        Assert.False(LinkPolicy.HasQuickMatch(null, "QuickMatch"));
-    }
-
-    // The joiner's game shows it in a BBCode popup, which drops square brackets and is cut at 100 characters.
-    [Fact]
-    public void TheReasonFitsTheJoinersPopup()
-    {
-        Assert.True(LinkPolicy.NoQuickMatchReason.Length < 100);
-        Assert.All(LinkPolicy.NoQuickMatchReason, c => Assert.True(c < 128 && c != '[' && c != ']'));
+        string? remote = LinkPolicy.QuickMatchRelease(otherMod == null ? null : [otherMod],
+            gameplayMod == null ? null : [gameplayMod], "QuickMatch");
+        Assert.Equal(expected, LinkPolicy.Admit("QuickMatch-v1", remote, acceptsSocketGuest).ToString());
     }
 
     [Fact]

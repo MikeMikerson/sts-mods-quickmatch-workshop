@@ -11,7 +11,7 @@ internal static class LobbyKeys
     public const string Proto = "qm_proto";
     // Bumped whenever the lobby keys, the game messages (new ones shift the message ids) or a rule every player must
     // follow change, so players of different releases never find each other's lobbies.
-    public const string ProtoValue = "24";
+    public const string ProtoValue = "25";
 
     // "2" to "4", or SizeAny.
     public const string Size = "qm_size";
@@ -55,7 +55,7 @@ internal static class LobbyKeys
     // list these lobbies.
     public const string ResumeProto = "qm_rproto";
     // Bumped with ProtoValue whenever a change also affects resume lobbies.
-    public const string ResumeProtoValue = "23";
+    public const string ResumeProtoValue = "24";
 
     // Seed and players of the saved run; only players of that run search for it.
     public const string ResumeKey = "qm_resume";

@@ -53,7 +53,8 @@ internal sealed class PlayerWindow
         long? again = blocked ? null : BlockStore.List.BlockableAgainAt(player, now);
         bool blockable = !blocked && again is null;
         bool canVote = BlockPlayers.CanVoteAgainst(player);
-        IReadOnlyList<PlayerControl> controls = LookLayout.PlayerControls(VoiceHere, inRun && EmoteRoom.Here, blockable, canVote);
+        bool guest = LobbyGuard.IsGuest(player);
+        IReadOnlyList<PlayerControl> controls = LookLayout.PlayerControls(VoiceHere && !guest, inRun && EmoteRoom.Here && !guest, blockable, canVote);
 
         var state = new List<string> { Loc.Get(inRun ? "QUICKMATCH.PLAYER.in_run" : "QUICKMATCH.PLAYER.in_lobby") };
         if (blocked)
@@ -104,7 +105,8 @@ internal sealed class PlayerWindow
         if (_voiceState == null)
         {
             // No Mute or volume: say why there is no voice here, so the window does not look as if something is missing.
-            GameLook.Note(_window.Page, Loc.Get("QUICKMATCH.PLAYER.no_voice")).HorizontalAlignment = HorizontalAlignment.Center;
+            string note = guest ? "QUICKMATCH.PLAYER.guest" : "QUICKMATCH.PLAYER.no_voice";
+            GameLook.Note(_window.Page, Loc.Get(note)).HorizontalAlignment = HorizontalAlignment.Center;
         }
         Refresh();
         _tree.ProcessFrame += Refresh;

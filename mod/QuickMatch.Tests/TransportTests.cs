@@ -10,10 +10,10 @@ public class TransportTests
     // Players meet only when their game version and both lobby protocol numbers match. A release that can play with
     // these releases keeps the numbers and joins the list; one that cannot moves them (LobbyKeys) and starts a new list.
     private const string Game = "0.111.1";
-    private const string Proto = "24";
-    private const string ResumeProto = "23";
-    private const ushort ChatProtocol = 19;
-    private static readonly string[] ReleasesThatPlayTogether = ["v0.30.0"];
+    private const string Proto = "25";
+    private const string ResumeProto = "24";
+    private const ushort ChatProtocol = 20;
+    private static readonly string[] ReleasesThatPlayTogether = ["v0.31.0"];
 
     [Fact]
     public void TheManifestsReleaseCarriesTheProtocolNumbersOfThoseItPlaysWith()

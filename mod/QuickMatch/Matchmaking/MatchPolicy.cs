@@ -227,6 +227,16 @@ public static class MatchPolicy
         return near.Count > 0 ? near : await search(false);
     }
 
+    // Steam may lag behind the game. An extra Steam member or a half-connected peer may still join;
+    // a guest cannot follow a move, answer an early-start prompt, or see the idle countdown.
+    public static int SettledQuickMatchGroup(IReadOnlyCollection<ulong> players, ulong host, IEnumerable<ulong> connected,
+        IEnumerable<ulong> steamMembers, IReadOnlyCollection<ulong> guests)
+    {
+        return guests.Count == 0 && players.Contains(host)
+            && players.Where(p => p != host).ToHashSet().SetEquals(connected)
+            && steamMembers.All(players.Contains) ? players.Count : 0;
+    }
+
     // An exact-size lobby with 2 or more players that has stayed this long at the same count short of full asks
     // everyone here whether to start now. Asked once per count: a join or leave starts the wait again.
     public const double StartShortSeconds = 120;

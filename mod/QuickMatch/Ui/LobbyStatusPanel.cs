@@ -87,6 +87,10 @@ internal static class LobbyStatusPanel
             + (MatchChoice.MaxAscension > 0 || ascension > 0
             ? Loc.WithNumber("QUICKMATCH.SUMMARY.asc_one", "level", ascension) + " · "
             : "") + voice;
+        if (Matchmaker.GuestPlayers.Count > 0)
+        {
+            line3 = Loc.Get("QUICKMATCH.STATUS.guest_recovery");
+        }
         return $"{line1}\n[font_size=24][color=#e8dcc0]{line2}\n{line3}[/color][/font_size]";
     }
 

@@ -1,3 +1,4 @@
+using System;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using MegaCrit.Sts2.Core.Entities.Multiplayer;
@@ -14,15 +15,28 @@ namespace QuickMatch.Transport;
 // not run, a ChatHost (lobby chat only). The game's entry point for such a host sets the platform to None, which would name players from a debug
 // list and record runs without Steam IDs; the game reads the platform only through INetGameService, so it is
 // answered here as Steam.
-//
-// Quick Match is not a gameplay mod, so the game's handshake lets in a player without it (one who followed an
-// invite link); such a player is turned away here with the reason.
 internal sealed class QuickMatchHostService : NetHostGameService, INetGameService, IHandshakeHandler
 {
-    public QuickMatchHostService()
+    private readonly string? _release;
+    private readonly Func<ulong, bool>? _mayJoinAsGuest;
+    private bool _guestAdmissionClosed;
+
+    public QuickMatchHostService(Func<ulong, bool>? mayJoinAsGuest = null)
         : base(PeerVersionInfo.LocalDefault())
     {
+        _release = ReleaseOf(LocalVersion);
+        _mayJoinAsGuest = mayJoinAsGuest;
     }
+
+    public void CloseGuestAdmission() => _guestAdmissionClosed = true;
+
+    private static string? ReleaseOf(PeerVersionInfo version) =>
+        LinkPolicy.QuickMatchRelease(version.otherMods, version.gameplayAffectingMods, MainFile.ModId);
+
+    public bool IsGuest(ulong peer) => GetVersionInfoForPeer(peer) is { } version && ReleaseOf(version) == null;
+
+    public bool IsQuickMatchPeer(ulong peer) => peer == NetId ||
+        (GetVersionInfoForPeer(peer) is { } version && ReleaseOf(version) is { } release && release == _release);
 
     PlatformType INetGameService.Platform => PlatformType.Steam;
 
@@ -57,12 +71,26 @@ internal sealed class QuickMatchHostService : NetHostGameService, INetGameServic
 
     void IHandshakeHandler.HandshakeSucceeded(ulong peerId, PeerVersionInfo versionInfo)
     {
-        if (LinkPolicy.HasQuickMatch(versionInfo.otherMods, MainFile.ModId) || LinkPolicy.HasQuickMatch(versionInfo.gameplayAffectingMods, MainFile.ModId))
+        bool usesSockets = false;
+#if !IPHONE
+        usesSockets = NetHost is MixedHost mixed && mixed.UsesSockets(peerId);
+#endif
+        bool acceptsGuest = usesSockets && !_guestAdmissionClosed && (_mayJoinAsGuest?.Invoke(peerId) ?? true);
+        PeerAdmission admission = LinkPolicy.Admit(_release, ReleaseOf(versionInfo), acceptsGuest);
+        if (admission is PeerAdmission.OtherRelease or PeerAdmission.GuestsUnavailable)
         {
-            HandshakeSucceeded(peerId, versionInfo);
+            string reason = admission == PeerAdmission.OtherRelease ? "This lobby uses a different Quick Match release."
+                : "This connection requires Quick Match.";
+            MainFile.Logger.Info($"refused {peerId}: {reason}");
+            GameVersions.TurnAway(this, peerId, NetError.ModMismatch, reason);
             return;
         }
-        MainFile.Logger.Info($"refused {peerId}: no Quick Match in their mods");
-        GameVersions.TurnAway(this, peerId, NetError.ModMismatch, LinkPolicy.NoQuickMatchReason);
+        HandshakeSucceeded(peerId, versionInfo);
+#if !IPHONE
+        if (admission == PeerAdmission.QuickMatch && NetHost is MixedHost desktop && desktop.UsesSockets(peerId))
+        {
+            desktop.AdmitQuickMatchPeer(peerId);
+        }
+#endif
     }
 }
